@@ -24,6 +24,35 @@ import threading
 import pyttsx3
 import numpy as np
 
+
+# ----- Name Listener (Press to speak) --------
+import keyboard
+import speech_recognition as sr
+
+def listen_while_pressed(key, prompt_text=""):
+    speak(prompt_text)
+    print(f"Hold '{key.upper()}' and speak...")
+    r = sr.Recognizer()
+    with sr.Microphone() as source:
+        audio_data = None
+        while True:
+            if keyboard.is_pressed(key):  # user starts pressing key
+                print("Listening...")
+                audio_data = r.listen(source, phrase_time_limit=5)
+            else:
+                if audio_data:
+                    break  # stop when key released
+        try:
+            text = r.recognize_google(audio_data).lower()
+            print(f"You said: {text}")
+            return text
+        except sr.UnknownValueError:
+            speak("Sorry, I didn’t catch that.")
+            return None
+        except Exception as e:
+            print("Error in voice recognition:", e)
+            return None
+
 # ----- Optional YOLO import -----
 YOLO_AVAILABLE = False
 MODEL_PATH = 'C:\\Users\\anujv\\OneDrive\\Desktop\\Programming\\Codes\\python\\Face Recognition\\Neytra\\Object\\Neytra-Obj_Detection\\models\\bestv3.pt'  # if you know the model file path (eg. "best.pt"), put it here
@@ -306,11 +335,37 @@ while True:
                 cv2.putText(frame, name, (fx1, fy1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 names_to_speak.append(f"{name} detected {position}")
             else:
+                print("\n ====================== \n")
                 print("[FACE] Unknown person detected.")
-                update_recent((x1, y1, x2, y2), None)
-                cv2.rectangle(frame, (fx1, fy1), (fx2, fy2), (0, 0, 255), 2)
-                cv2.putText(frame, "Unknown", (fx1, fy1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                names_to_speak.append(f"Unknown person {position}")
+                speak("Unknown person detected, Press V and say Hello if you want to add them. Or P to cancel")
+
+                adding_key = keyboard.read_key().lower()
+                if adding_key != 'p':
+                    response = listen_while_pressed('v')
+
+                print(response)
+
+                if response and "hello" in response:
+                    name = None
+                    while not name:
+                        name = listen_while_pressed('v', "Press V and say the name of the person.")
+                        if not name:    
+                            continue
+                        speak(f"You said {name}. Press C to confirm or any other key to cancel")
+                        confirm_key = keyboard.read_key().lower()
+                        if confirm_key == 'c':
+                            db.setdefault(name, []).append(face_encoding)
+                            save_database(db)
+                            speak(f"{name} added to memory.")
+                            print(f"{name} added to DB.")
+                        else:
+                            speak("Cancelled adding new face.")
+                            print("Cancelled adding new face.")
+                        break
+                else:
+                    speak("Okay, not adding new person.")
+
+
 
     # --- Combined speech section ---
     cleanup_recent(ttl=5.0)
@@ -345,3 +400,11 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 speak("Neytra shutting down.")
+
+
+
+
+
+
+
+
