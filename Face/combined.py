@@ -16,7 +16,7 @@ Config:
 
 from time import time
 import time as _time
-import cv2
+import cv2  
 import face_recognition
 import pickle
 import os
@@ -167,16 +167,79 @@ CONF_THRESHOLD = 0.5        # YOLO confidence threshold
 FACE_MATCH_THRESHOLD = 0.50 # lower -> stricter; 0.5–0.55 recommended
 PERSON_COOLDOWN = 3.0       # seconds to reuse last result for a nearby bbox
 TTS_MIN_GAP = 1.0           # seconds between any two TTS calls
+last_spoken = {}      # stores { phrase: last_time_spoken }
 
-SPEAK_COOLDOWN = 4.0  # seconds between repeats of same phrase
-last_spoken = {}       # stores { phrase: last_time_spoken }
+# ---------- ENCOUNTER STATE TRACKING ----------
+RE_ENCOUNTER_TIME = 30.0  # seconds before re-greeting after person leaves
+encounter_state = {}      # {name: {"last_seen": ts, "in_frame": bool}}
+
+# Speech tracking (separate from encounter logic)
+SPEAK_COOLDOWN = 2.0      # minimum gap between any two TTS calls
+last_tts_time = 0.0
+
+
+
+def announce_person(name, position):
+    """
+    Decides if we should speak a person's name based on encounter state.
+    Returns True if we should speak, False otherwise.
+    """
+    now = time()
+    
+    # Case 1: Never seen before
+    if name not in encounter_state:
+        encounter_state[name] = {"last_seen": now, "in_frame": True}
+        return True  # speak first time
+    
+    # Case 2: Seen before
+    last_seen = encounter_state[name]["last_seen"]
+    was_in_frame = encounter_state[name]["in_frame"]
+    
+    # Sub-case 2a: They were NOT in frame (absent), now returned
+    if not was_in_frame:
+        # Only re-greet if enough time passed
+        if now - last_seen > RE_ENCOUNTER_TIME:
+            encounter_state[name]["last_seen"] = now
+            encounter_state[name]["in_frame"] = True
+            return True  # speak after long absence
+        else:
+            # They returned but within 30s — don't speak yet
+            encounter_state[name]["in_frame"] = True
+            encounter_state[name]["last_seen"] = now
+            return False
+    
+    # Sub-case 2b: They were already in frame (continuous presence)
+    # Don't speak again, just update timestamp
+    encounter_state[name]["last_seen"] = now
+    encounter_state[name]["in_frame"] = True
+    return False
+
+
+def mark_person_absent(name):
+    """Mark a person as absent (they left the frame)."""
+    if name in encounter_state:
+        encounter_state[name]["in_frame"] = False
+
+
+def cleanup_encounter_state(max_age=120.0):
+    """
+    Optional: Remove very old people (> 2 minutes unseen) to save memory.
+    Only call if you want to limit dict size.
+    """
+    now = time()
+    names_to_remove = [
+        name for name, state in encounter_state.items()
+        if now - state["last_seen"] > max_age
+    ]
+    for name in names_to_remove:
+        del encounter_state[name]
 
 
 # ---------- Per-person cache to avoid repeating recognition each frame ----------
 # Each entry: {id: {'box': (x1,y1,x2,y2), 'name': name_or_None, 'time': ts}}
 recent_people = []
 
-last_tts_time = 0.0
+
 
 # Helper to update recent_people: match by spatial proximity
 def find_recent_for_box(box, max_dist=80):
@@ -195,10 +258,18 @@ def update_recent(box, name):
     else:
         recent_people.append({'box': box, 'name': name, 'time': now})
 
-# Cleanup old entries periodically
 def cleanup_recent(ttl=5.0):
+    """
+    Remove cached entries older than ttl (time-to-live) seconds.
+    Keeps memory from growing unbounded.
+    """
+    global recent_people
     now = time()
-    recent_people[:] = [e for e in recent_people if now - e['time'] < ttl]
+    recent_people = [
+        entry for entry in recent_people
+        if now - entry['time'] < ttl
+    ]
+
 
 # ---------- Main loop ----------
 cap = cv2.VideoCapture(0)
@@ -215,7 +286,8 @@ while True:
         break
 
     frame_h, frame_w = frame.shape[:2]
-    detections = []  # each detection: dict with keys 'label','conf','box' where box=(x1,y1,x2,y2)
+    detections = []
+    
     # --- Object detection step (if yolo available) ---
     if yolo_model is not None:
         try:
@@ -261,17 +333,22 @@ while True:
                 x1,y1,x2,y2 = left,top,right,bottom
                 detections.append({'label': 'person', 'conf': 0.9, 'box': (x1,y1,x2,y2)})
 
-    # --- Process person and other detections: run face_recognition + speak results ---
-    names_to_speak = []  # strings to speak this frame
-    objects_to_speak = []  # for normal YOLO objects
+    # ========== NEW: Track which people we detected THIS frame ==========
+    people_detected_this_frame = set()  # names of people recognized this frame
+    
 
-    frame_center = frame_w // 2  # for left/center/right logic
+    objects_to_speak = []
+
+    # ========== PROCESS DETECTIONS ==========
+    speech_queue = []  # collect what to speak (avoid duplicates)
+
+    frame_center = frame_w // 2
     for det in detections:
         label = det['label'].lower()
         (x1, y1, x2, y2) = det['box']
         cx = (x1 + x2) // 2
 
-        # Determine position zone
+        # Determine position
         if cx < frame_center - frame_w * 0.2:
             position = "on your left"
         elif cx > frame_center + frame_w * 0.2:
@@ -279,22 +356,26 @@ while True:
         else:
             position = "ahead"
 
-        # Draw base box for all detections
+        # Draw detection box
         color = (255, 200, 0) if label == "person" else (255, 180, 0)
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
         cv2.putText(frame, det['label'], (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-        # Handle object feedback (always print + optionally speak)
-        print(f"[OBJECT] {det['label'].upper()} detected {position} (conf {det['conf']:.2f})")
+        # ← ADD THIS: Collect all objects to speak (not just persons)
         objects_to_speak.append(f"{det['label']} {position}")
 
-        # --- If this is a person, run facial recognition ---
+
+        # --- If PERSON: run face recognition ---
         if label == "person":
             recent = find_recent_for_box((x1, y1, x2, y2), max_dist=80)
+            
+            # Try cached result first
             if recent and (time() - recent['time'] < PERSON_COOLDOWN) and recent.get('name'):
-                # reuse cached recognition
                 name = recent['name']
-                print(f"[FACE] Cached person recognized: {name}")
+                people_detected_this_frame.add(name)
+                print(f"[FACE] Cached: {name}")
+                
+                # Draw face box
                 fx1 = int(x1 + (x2 - x1) * 0.15)
                 fy1 = int(y1 + (y2 - y1) * 0.05)
                 fx2 = int(x2 - (x2 - x1) * 0.15)
@@ -303,7 +384,7 @@ while True:
                 cv2.putText(frame, name, (fx1, fy1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 continue
 
-            # crop for face recog
+            # Run fresh face recognition
             crop = frame[y1:y2, x1:x2]
             if crop.size == 0:
                 continue
@@ -313,7 +394,7 @@ while True:
             face_encs = face_recognition.face_encodings(rgb_crop, face_locs)
 
             if not face_encs:
-                print("[FACE] No face detected in person region.")
+                print("[FACE] No face in person region")
                 update_recent((x1, y1, x2, y2), None)
                 continue
 
@@ -327,72 +408,86 @@ while True:
             face_encoding = face_encs[0]
             best_name, best_dist = compare_face_to_db(face_encoding, db)
 
+            # --- KNOWN PERSON ---
             if best_name is not None and best_dist < FACE_MATCH_THRESHOLD:
                 name = best_name
-                print(f"[FACE] {name} recognized (distance {best_dist:.2f})")
+                people_detected_this_frame.add(name)
+                print(f"[FACE] Recognized: {name} (distance {best_dist:.2f})")
                 update_recent((x1, y1, x2, y2), name)
+                
+                # Draw green box for known person
                 cv2.rectangle(frame, (fx1, fy1), (fx2, fy2), (0, 255, 0), 2)
                 cv2.putText(frame, name, (fx1, fy1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                names_to_speak.append(f"{name} detected {position}")
+                
+                # ========== USE ENCOUNTER LOGIC ==========
+                print("\n")
+                if announce_person(name, position):
+                    print("30 Second Cooldown acheived")
+                    speech_queue.append(f"{name} detected {position}")
+                else:
+                    print("Failed to cross 30 second cooldown")
+                print(f" {name}'s (time_last_seen {encounter_state[name]['last_seen']})")
+                print("\n")
+                
+            # --- UNKNOWN PERSON ---
             else:
-                print("\n ====================== \n")
-                print("[FACE] Unknown person detected.")
-                speak("Unknown person detected, Press V and say Hello if you want to add them. Or P to cancel")
+                print("[FACE] Unknown person detected")
+                speak("Unknown person detected. Press V and say Hello to add them, or P to cancel")
 
                 adding_key = keyboard.read_key().lower()
-                if adding_key != 'p':
-                    response = listen_while_pressed('v')
+                if adding_key == 'p':
+                    continue  # skip enrollment
 
-                print(response)
-
-                if response and "hello" in response:
-                    name = None
-                    while not name:
-                        name = listen_while_pressed('v', "Press V and say the name of the person.")
-                        if not name:    
-                            continue
-                        speak(f"You said {name}. Press C to confirm or any other key to cancel")
-                        confirm_key = keyboard.read_key().lower()
-                        if confirm_key == 'c':
-                            db.setdefault(name, []).append(face_encoding)
-                            save_database(db)
-                            speak(f"{name} added to memory.")
-                            print(f"{name} added to DB.")
-                        else:
-                            speak("Cancelled adding new face.")
-                            print("Cancelled adding new face.")
-                        break
-                else:
+                response = listen_while_pressed('v')
+                if not response or "hello" not in response:
                     speak("Okay, not adding new person.")
+                    continue
 
+                # Get name
+                name = None
+                while not name:
+                    name = listen_while_pressed('v', "Press V and say the name of this person.")
+                    if not name:
+                        continue
 
+                    speak(f"You said {name}. Press C to confirm or P key to cancel.")
+                    confirm_key = keyboard.read_key().lower()
 
-    # --- Combined speech section ---
+                    if confirm_key == 'c':
+                        db.setdefault(name, []).append(face_encoding)
+                        save_database(db)
+                        speak(f"{name} added to memory.")
+                        print(f"{name} added to DB.")
+                        
+                        # Mark as seen so we don't repeat name immediately
+                        encounter_state[name] = {"last_seen": time(), "in_frame": True}
+                        people_detected_this_frame.add(name)
+                    else:
+                        speak("Cancelled.")
+                    break
+        
+    # ========== MARK ABSENT: Anyone not detected this frame ==========
+    for name in encounter_state.keys():
+        if name not in people_detected_this_frame:
+            mark_person_absent(name)
+
+    # ========== SPEAK QUEUED MESSAGES ==========
     cleanup_recent(ttl=5.0)
-
+    
     # Combine both object and face outputs (avoid duplicates)
-    to_say = list(set(objects_to_speak + names_to_speak))
+    to_say = list(set(objects_to_speak + speech_queue))
+    # current_time = time()
+    # final_to_say = []
+
+    
     current_time = time()
-    final_to_say = []
-
-    for phrase in to_say:
-        # Only speak if cooldown expired or phrase new
-        if phrase not in last_spoken or (current_time - last_spoken[phrase] > SPEAK_COOLDOWN):
-            final_to_say.append(phrase)
-            last_spoken[phrase] = current_time
-
-    # Speak only if something new and overall cooldown passed
-    if final_to_say and (current_time - last_tts_time > TTS_MIN_GAP):
-        sentence = ", ".join(final_to_say)
-        print(f"[SPEECH] Speaking: {sentence}")
-        try:
-            speak(sentence)
-        except Exception as e:
-            print("TTS error:", e)
+    if to_say and (current_time - last_tts_time > SPEAK_COOLDOWN):
+        sentence = ", ".join(to_say)
+        print(f"[SPEECH] {sentence}")
+        speak(sentence)
         last_tts_time = current_time
 
-
-    # show frame
+    # Show frame
     cv2.imshow('Neytra Integrated', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
@@ -400,11 +495,5 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 speak("Neytra shutting down.")
-
-
-
-
-
-
 
 
