@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neytra Mobile Client</title>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 10px;
+      background: #111;
+      color: #fff;
+      text-align: center;
+    }
+
+    video {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+    }
+
+    #output {
+      margin-top: 15px;
+      padding: 10px;
+      background: #222;
+      border-radius: 10px;
+      min-height: 60px;
+    }
+
+    button {
+      padding: 12px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 10px;
+      background: #4CAF50;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:active {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+
+<h2>👓 Neytra — Smart Glasses Simulation</h2>
+
+<video id="cam" autoplay playsinline></video>
+
+<div id="output">Waiting for frames...</div>
+
+<button id="toggleBtn">Start Streaming</button>
+<button id="describeBtn">Describe Surroundings</button>
+
+<script>
+const backendURL = "http://192.168.100.1:8000";  // ← CHANGE THIS
+let streaming = false;
+let intervalId = null;
+
+const video = document.getElementById("cam");
+const output = document.getElementById("output");
+
+// ---------- 1. Access phone camera ----------
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" }, // back camera
+      audio: false
+    });
+    video.srcObject = stream;
+  } catch (err) {
+    output.innerText = "Camera Error: " + err;
+  }
+}
+startCamera();
+
+// ---------- 2. Capture + send frame ----------
+async function sendFrame() {
+  if (!streaming) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 240;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.6)
+  );
+
+  const formData = new FormData();
+  formData.append("file", blob, "frame.jpg");
+
+  try {
+    const res = await fetch(`${backendURL}/frame`, {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+    handleDetection(data.results);
+  } catch (err) {
+    output.innerText = "Connection Error: " + err;
+  }
+}
+
+// ---------- 3. Handle detection JSON ----------
+function handleDetection(results) {
+  if (!results || results.length === 0) {
+    output.innerHTML = "No detections.";
+    return;
+  }
+
+  let text = "";
+  let speakText = "";
+
+  results.forEach(r => {
+    if (r.type === "face") {
+      if (r.name === "unknown") {
+        text += `👤 Unknown Person<br>`;
+        speakText += "Unknown person detected. ";
+      } else {
+        text += `🟢 ${r.name}<br>`;
+        if (r.announce) speakText += `${r.name} detected. `;
+      }
+    } else if (r.type === "object") {
+      text += `📦 ${r.label}<br>`;
+    }
+  });
+
+  output.innerHTML = text;
+
+  if (speakText.trim().length > 0) {
+    speak(speakText);
+  }
+}
+
+// ---------- 4. Text-to-Speech ----------
+function speak(text) {
+  const msg = new SpeechSynthesisUtterance(text);
+  msg.rate = 1.0;
+  msg.pitch = 1.0;
+  msg.volume = 1.0;
+  window.speechSynthesis.speak(msg);
+}
+
+// ---------- 5. Streaming toggle ----------
+document.getElementById("toggleBtn").onclick = () => {
+  streaming = !streaming;
+
+  if (streaming) {
+    intervalId = setInterval(sendFrame, 400); // ~2.5 FPS
+    output.innerText = "Streaming started…";
+    document.getElementById("toggleBtn").innerText = "Stop Streaming";
+  } else {
+    clearInterval(intervalId);
+    output.innerText = "Streaming stopped.";
+    document.getElementById("toggleBtn").innerText = "Start Streaming";
+  }
+};
+
+// ---------- 6. Describe Surroundings ----------
+document.getElementById("describeBtn").onclick = async () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 240;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.6)
+  );
+
+  const formData = new FormData();
+  formData.append("file", blob, "frame.jpg");
+
+  output.innerHTML = "🔍 Asking AI…";
+
+  const res = await fetch(`${backendURL}/describe`, {
+    method: "POST",
+    body: formData
+  });
+
+  const data = await res.json();
+
+  output.innerHTML = "🗣 " + data.description;
+  speak(data.description);
+};
+</script>
+</body>
+</html>

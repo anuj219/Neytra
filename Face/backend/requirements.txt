@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+opencv-python
+numpy
+pillow
+face_recognition
+pyttsx3
+python-multipart
+ultralytics
+speechrecognition
+keyboard
