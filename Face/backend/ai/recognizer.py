@@ -5,17 +5,23 @@ import os
 import numpy as np
 import face_recognition
 
-# Get absolute path to db directory relative to this file
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "db", "faces.pkl")
+# Prefer shared DB if available; fall back to backend-local DB
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Face/backend
+FACE_DIR = os.path.dirname(BACKEND_DIR)  # Face
+SHARED_DB = os.path.join(FACE_DIR, "faces.pkl")
+BACKEND_DB = os.path.join(BACKEND_DIR, "db", "faces.pkl")
+
+if os.path.exists(SHARED_DB):
+    DB_PATH = SHARED_DB
+else:
+    DB_PATH = BACKEND_DB
 
 def load_database():
     if not os.path.exists(DB_PATH):
-        print(f"Warning: Database not found at {DB_PATH}")
+        print(f"[FACE DB] No DB found at {DB_PATH}, starting empty.")
         return {}
     with open(DB_PATH, "rb") as f:
         data = pickle.load(f)
-    print(f"Loaded database from {DB_PATH} with {len(data)} entries")
 
     # legacy format support
     if isinstance(data, dict) and "encodings" in data and "names" in data:
@@ -25,6 +31,7 @@ def load_database():
             new.setdefault(name, []).append(enc)
         return new
 
+    print(f"[FACE DB] Loaded DB from {DB_PATH} with {len(data)} people.")
     return data
 
 

@@ -33,7 +33,7 @@
       margin: 10px;
       border: none;
       border-radius: 10px;
-      background: #4CAF50;
+      /* background: #4CAF50; */
       color: white;
       font-size: 16px;
       cursor: pointer;
@@ -53,28 +53,31 @@
 <div id="output">Waiting for frames...</div>
 
 <button id="toggleBtn">Start Streaming</button>
-<button id="describeBtn">Describe Surroundings</button>
 
 <script>
-const backendURL = "http://192.168.100.1:8000";  // ← CHANGE THIS
+const backendURL = "http://192.168.29.118:8000";
+
 let streaming = false;
 let intervalId = null;
 
 const video = document.getElementById("cam");
 const output = document.getElementById("output");
 
-// ---------- 1. Access phone camera ----------
+// ---------- 1. Access phone camera (FRONT for now) ----------
 async function startCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }, // back camera
-      audio: false
-    });
+    const constraints = {
+      video: { facingMode: { ideal: "user" } }, // front/selfie camera
+      audio: false,
+    };
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
   } catch (err) {
     output.innerText = "Camera Error: " + err;
   }
 }
+
 startCamera();
 
 // ---------- 2. Capture + send frame ----------
@@ -82,8 +85,8 @@ async function sendFrame() {
   if (!streaming) return;
 
   const canvas = document.createElement("canvas");
-  canvas.width = 320;
-  canvas.height = 240;
+  canvas.width = 640;
+  canvas.height = 480;
   const ctx = canvas.getContext("2d");
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -101,6 +104,7 @@ async function sendFrame() {
     });
 
     const data = await res.json();
+    console.log("Data received: "+data.results);
     handleDetection(data.results);
   } catch (err) {
     output.innerText = "Connection Error: " + err;
@@ -114,27 +118,46 @@ function handleDetection(results) {
     return;
   }
 
-  let text = "";
-  let speakText = "";
+  const FRAME_WIDTH = 640; // must match capture width
+  const center = FRAME_WIDTH / 2;
+  const margin = FRAME_WIDTH * 0.2;
 
-  results.forEach(r => {
+  function getPosition(bbox) {
+    if (!bbox || bbox.length < 4) return "ahead";
+    const [x1, , x2] = bbox;
+    const cx = (x1 + x2) / 2;
+    if (cx < center - margin) return "on your left";
+    if (cx > center + margin) return "on your right";
+    return "ahead";
+  }
+
+  let text = "";
+  const phrases = [];
+
+  results.forEach((r) => {
+    const pos = getPosition(r.bbox);
+
     if (r.type === "face") {
       if (r.name === "unknown") {
-        text += `👤 Unknown Person<br>`;
-        speakText += "Unknown person detected. ";
+        text += `👤 Unknown person (${pos})<br>`;
+        phrases.push(`Unknown person ${pos}`);
       } else {
-        text += `🟢 ${r.name}<br>`;
-        if (r.announce) speakText += `${r.name} detected. `;
+        text += `🟢 ${r.name} (${pos})<br>`;
+        if (r.announce) {
+          phrases.push(`${r.name} ${pos}`);
+        }
       }
     } else if (r.type === "object") {
-      text += `📦 ${r.label}<br>`;
+      text += `📦 ${r.label} (${pos})<br>`;
+      phrases.push(`${r.label} ${pos}`);
     }
   });
 
-  output.innerHTML = text;
+  output.innerHTML = text || "No detections.";
 
-  if (speakText.trim().length > 0) {
-    speak(speakText);
+  if (phrases.length > 0) {
+    const sentence = phrases.join(", ");
+    speak(sentence);
   }
 }
 
@@ -162,33 +185,6 @@ document.getElementById("toggleBtn").onclick = () => {
   }
 };
 
-// ---------- 6. Describe Surroundings ----------
-document.getElementById("describeBtn").onclick = async () => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 320;
-  canvas.height = 240;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  const blob = await new Promise((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.6)
-  );
-
-  const formData = new FormData();
-  formData.append("file", blob, "frame.jpg");
-
-  output.innerHTML = "🔍 Asking AI…";
-
-  const res = await fetch(`${backendURL}/describe`, {
-    method: "POST",
-    body: formData
-  });
-
-  const data = await res.json();
-
-  output.innerHTML = "🗣 " + data.description;
-  speak(data.description);
-};
 </script>
 </body>
 </html>
