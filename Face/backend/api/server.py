@@ -63,6 +63,15 @@
 
 
 # api/server.py
+from ai.recognizer import add_encoding_to_person, save_database
+import face_recognition
+
+enrollment_state = {
+    "active": False,
+    "step": None,
+    "pending_enc": None,
+    "pending_name": None
+}
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,12 +125,9 @@ class VoiceCommand(BaseModel):
     command: str
 
 
-class IntentResponse(BaseModel):
-    intent: str
+class ModeResponse(BaseModel):
     mode: str
-    confidence: float
-    response: str
-    action: str = None
+    prompt: str = None
 
 
 # ============ GROQ INTENT DETECTION ============
@@ -185,7 +191,7 @@ def detect_intent_groq(command: str) -> dict:
         result = json.loads(response_text)
 
         # Validate required fields
-        required_fields = ["intent", "mode", "confidence", "response"]
+        required_fields = ["mode"]
         if not all(field in result for field in required_fields):
             raise ValueError("Missing required fields in Groq response")
 
@@ -193,7 +199,7 @@ def detect_intent_groq(command: str) -> dict:
         if "action" not in result:
             result["action"] = None
 
-        print(f"[GROQ] Parsed intent: {result['intent']}")
+        print(f"[GROQ] Parsed mode: {result['mode']}")
         return result
 
     except json.JSONDecodeError as e:
@@ -280,7 +286,7 @@ async def receive_frame(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/voice-command", response_model=IntentResponse)
+@app.post("/voice-command", response_model=ModeResponse)
 async def process_voice_command(voice_input: VoiceCommand):
     """
     Process voice command and determine intent using Groq LLM.
@@ -296,17 +302,13 @@ async def process_voice_command(voice_input: VoiceCommand):
     print(f"\n[VOICE] Received: '{command}'")
 
     # Use Groq for intent detection
-    intent_data = detect_intent_groq(command)
+    mode_data = detect_intent_groq(command)
 
-    print(
-        f"[INTENT] Detected: {intent_data['intent']} (mode: {intent_data['mode']}, confidence: {intent_data['confidence']})"
-    )
-    print(f"[RESPONSE] Will say: '{intent_data['response']}'")
-    if intent_data["action"]:
-        print(f"[ACTION] Will execute: {intent_data['action']}\n")
-
-    return IntentResponse(**intent_data)
-
+    print(f"[MODE] → {mode_data['mode']}")
+    if "prompt" in mode_data:
+        print(f"[PROMPT] → {mode_data['prompt']}")
+    print(f"{'='*60}\n")
+    return ModeResponse(**mode_data)
 
 @app.get("/")
 def root():
@@ -337,6 +339,71 @@ def health_check():
             GROQ_API_KEY and GROQ_API_KEY != "your-groq-api-key-here"
         ),
     }
+
+# Enrollment Endpoints ---------->>>>>>>>>>>>>>>
+@app.post("/enrollment/start")
+async def start_enrollment(data: dict):
+    if enrollment_state["active"]:
+        return { "response": "Enrollment already in progress." }
+
+    # Receive frame
+    img_bytes = data.get("frame")
+    if not img_bytes:
+        return { "response": "No face frame provided." }
+
+    img = Image.open(io.BytesIO(bytes(img_bytes))).convert("RGB")
+    frame_rgb = np.array(img)
+
+    # Extract face encoding
+    face_locs = face_recognition.face_locations(frame_rgb)
+    if not face_locs:
+        return { "response": "No face detected for enrollment." }
+
+    enc = face_recognition.face_encodings(frame_rgb, face_locs)[0]
+
+    enrollment_state["active"] = True
+    enrollment_state["step"] = "ask_name"
+    enrollment_state["pending_enc"] = enc
+    enrollment_state["pending_name"] = None
+
+    return { "response": "Tell me their name." }
+
+@app.post("/enrollment/name")
+async def receive_name(data: dict):
+    if not enrollment_state["active"] or enrollment_state["step"] != "ask_name":
+        return { "response": "No active enrollment waiting for name." }
+
+    name = data.get("name")
+    if not name:
+        return { "response": "Please say the name again." }
+
+    enrollment_state["pending_name"] = name
+    enrollment_state["step"] = "confirm"
+
+    return { "response": f"You said {name}. Should I save this?" }
+
+@app.post("/enrollment/confirm")
+async def confirm_enrollment(data: dict):
+    if not enrollment_state["active"] or enrollment_state["step"] != "confirm":
+        return { "response": "Nothing to confirm." }
+
+    confirm = data.get("confirm", "").lower()
+    if confirm != "yes":
+        enrollment_state["active"] = False
+        enrollment_state["step"] = None
+        return { "response": "Enrollment cancelled." }
+
+    name = enrollment_state["pending_name"]
+    enc = enrollment_state["pending_enc"]
+
+    add_encoding_to_person(db, name, enc)
+    save_database(db)
+
+    enrollment_state["active"] = False
+    enrollment_state["step"] = None
+
+    return { "response": f"Saved {name}." }
+
 
 
 # Mount static files

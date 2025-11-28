@@ -49,16 +49,24 @@ def process_frame(frame):
                     "type": "face",
                     "name": "unknown",
                     "bbox": det["bbox"],
-                    "announce": False
+                    "announce": False,
+                    "enrollable": True    # <— ADD THIS
                 })
                 continue
 
             face_enc = face_encs[0]
-            best_name, best_dist = compare_face_to_db(face_enc, db)
+            best_name, best_dist, best_idx = compare_face_to_db(face_enc, db)
+
 
             if best_name and best_dist < FACE_MATCH_THRESHOLD:
                 announce = update_presence(best_name)
                 names_this_frame.add(best_name)
+                
+                # strong match --> update adaptive encoding slot
+                if best_dist < 0.45:  # strong confidence
+                    from ai.recognizer import add_encoding_to_person, save_database
+                    add_encoding_to_person(db, best_name, face_enc)
+                    save_database(db)
 
                 results.append({
                     "type": "face",
