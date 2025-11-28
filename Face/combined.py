@@ -55,7 +55,7 @@ def listen_while_pressed(key, prompt_text=""):
 
 # ----- Optional YOLO import -----
 YOLO_AVAILABLE = False
-MODEL_PATH = 'C:\\Users\\anujv\\OneDrive\\Desktop\\Programming\\Codes\\python\\Face Recognition\\Neytra\\Object\\Neytra-Obj_Detection\\models\\bestv3.pt'  # if you know the model file path (eg. "best.pt"), put it here
+MODEL_PATH = 'C:\\Users\\anujv\\OneDrive\\Desktop\\Programming\\Codes\\python\\Face Recognition\\Neytra\\Object\\Neytra-Obj_Detection\\models\\bestLatest.pt'  # if you know the model file path (eg. "best.pt"), put it here
  # if you know the model file path (eg. "best.pt"), put it here
 
 try:
