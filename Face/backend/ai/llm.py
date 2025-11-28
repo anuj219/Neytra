@@ -4,10 +4,12 @@ import os
 import google.generativeai as genai
 from PIL import Image
 import io
+from dotenv import load_dotenv
 
+load_dotenv()
 # Configure the API key
 # Ideally, this should be loaded from environment variables for security
-api_key = os.environ.get("GOOGLE_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     print("Warning: GOOGLE_API_KEY environment variable not set. LLM features will fail.")
 else:
