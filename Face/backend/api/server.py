@@ -69,6 +69,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Any
 from ai.pipeline import process_frame
 from PIL import Image
 import numpy as np
@@ -116,18 +117,15 @@ class VoiceCommand(BaseModel):
     command: str
 
 
-class IntentResponse(BaseModel):
-    intent: str
-    mode: str
-    confidence: float
-    response: str
-    action: str = None
+class ModeResponse(BaseModel):
+    mode: str = None
+    prompt: str = None
 
 
 # ============ GROQ INTENT DETECTION ============
 
 
-def detect_intent_groq(command: str) -> dict:
+def detect_mode_groq(command: str) -> dict:
     """
     Advanced intent detection using Groq's Llama 3.3.
     """
@@ -185,15 +183,11 @@ def detect_intent_groq(command: str) -> dict:
         result = json.loads(response_text)
 
         # Validate required fields
-        required_fields = ["intent", "mode", "confidence", "response"]
+        required_fields = ["mode"]
         if not all(field in result for field in required_fields):
             raise ValueError("Missing required fields in Groq response")
 
-        # Ensure action field exists
-        if "action" not in result:
-            result["action"] = None
-
-        print(f"[GROQ] Parsed intent: {result['intent']}")
+        print(f"[GROQ] Parsed mode: {result['mode']}")
         return result
 
     except json.JSONDecodeError as e:
@@ -280,7 +274,7 @@ async def receive_frame(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/voice-command", response_model=IntentResponse)
+@app.post("/voice-command", response_model=ModeResponse)
 async def process_voice_command(voice_input: VoiceCommand):
     """
     Process voice command and determine intent using Groq LLM.
@@ -296,16 +290,13 @@ async def process_voice_command(voice_input: VoiceCommand):
     print(f"\n[VOICE] Received: '{command}'")
 
     # Use Groq for intent detection
-    intent_data = detect_intent_groq(command)
+    mode_data = detect_mode_groq(command)
 
-    print(
-        f"[INTENT] Detected: {intent_data['intent']} (mode: {intent_data['mode']}, confidence: {intent_data['confidence']})"
-    )
-    print(f"[RESPONSE] Will say: '{intent_data['response']}'")
-    if intent_data["action"]:
-        print(f"[ACTION] Will execute: {intent_data['action']}\n")
-
-    return IntentResponse(**intent_data)
+    print(f"[MODE] → {mode_data['mode']}")
+    if "prompt" in mode_data:
+        print(f"[PROMPT] → {mode_data['prompt']}")
+    print(f"{'='*60}\n")
+    return ModeResponse(**mode_data)
 
 
 @app.get("/")
