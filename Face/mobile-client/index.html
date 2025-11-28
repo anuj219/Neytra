@@ -1,48 +1,11 @@
 <!DOCTYPE html>
 <html>
+
+
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neytra Mobile Client</title>
-
-  <!-- <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      padding: 10px;
-      background: #111;
-      color: #fff;
-      text-align: center;
-    }
-
-    video {
-      width: 100%;
-      max-width: 400px;
-      border-radius: 10px;
-    }
-
-    #output {
-      margin-top: 15px;
-      padding: 10px;
-      background: #222;
-      border-radius: 10px;
-      min-height: 60px;
-    }
-
-    button {
-      padding: 12px 20px;
-      margin: 10px;
-      border: none;
-      border-radius: 10px;
-      /* background: #4CAF50; */
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    button:active {
-      background: #45a049;
-    }
-  </style> -->
 
   <style>
     * {
@@ -58,24 +21,20 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 15px;
-      overflow-x: hidden;
+      padding: 20px;
     }
 
-    /* Header */
     .header {
       text-align: center;
-      padding: 20px 0;
-      background: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      background: rgba(0, 212, 255, 0.1);
       border-radius: 15px;
       margin-bottom: 20px;
-      backdrop-filter: blur(10px);
     }
 
     .header h1 {
-      font-size: 28px;
-      font-weight: 600;
-      background: linear-gradient(90deg, #00d4ff, #0099ff);
+      font-size: 32px;
+      background: linear-gradient(135deg, #00d4ff, #0099ff);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 5px;
@@ -86,7 +45,6 @@
       color: #aaa;
     }
 
-    /* Video Container */
     .video-container {
       position: relative;
       width: 100%;
@@ -94,99 +52,87 @@
       margin: 0 auto 20px;
       border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3);
       background: #000;
+      box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3);
     }
 
     video {
       width: 100%;
-      height: auto;
       display: block;
-      aspect-ratio: 4/3;
     }
 
     .video-overlay {
       position: absolute;
-      top: 10px;
-      right: 10px;
+      top: 15px;
+      right: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
       background: rgba(0, 0, 0, 0.7);
       padding: 8px 15px;
       border-radius: 20px;
       font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       background: #ff4444;
-      animation: pulse 2s infinite;
     }
 
     .status-dot.active {
-      background: #44ff44;
+      background: #00ff00;
+      box-shadow: 0 0 10px #00ff00;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    /* Output Display */
     #output {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto 20px;
-      padding: 20px;
       background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(0, 212, 255, 0.3);
       border-radius: 15px;
+      padding: 20px;
+      margin: 0 auto 20px;
+      max-width: 600px;
+      width: 100%;
       min-height: 80px;
       font-size: 16px;
-      line-height: 1.6;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      text-align: left;
     }
 
-    #output strong {
-      color: #00d4ff;
-    }
-
-    /* Control Buttons */
     .controls {
       display: flex;
       justify-content: center;
       gap: 15px;
-      margin-bottom: 30px;
       flex-wrap: wrap;
+      margin-bottom: 20px;
     }
 
     button {
-      padding: 12px 30px;
+      padding: 12px 24px;
       border: none;
-      border-radius: 25px;
+      border-radius: 10px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    }
-
-    #toggleBtn {
       background: linear-gradient(135deg, #00d4ff, #0099ff);
       color: white;
     }
 
-    #toggleBtn:hover {
+    button:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
     }
 
-    #toggleBtn:active {
+    button:active {
       transform: translateY(0);
+    }
+
+    #analyzeBtn {
+      background: linear-gradient(135deg, #673AB7, #512DA8);
+    }
+
+    #analyzeBtn:hover {
+      box-shadow: 0 6px 20px rgba(103, 58, 183, 0.4);
     }
 
     #toggleBtn.streaming {
@@ -240,9 +186,12 @@
     }
 
     @keyframes mic-pulse {
-      0%, 100% {
+
+      0%,
+      100% {
         box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
       }
+
       50% {
         box-shadow: 0 0 40px rgba(255, 68, 68, 1);
       }
@@ -335,17 +284,19 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
+
 <body>
 
-<div class="header">
+  <div class="header">
     <h1>👓 Neytra</h1>
     <p>Smart Glasses Simulation</p>
   </div>
-
   <!-- Video Container -->
   <div class="video-container">
     <video id="cam" autoplay playsinline muted></video>
@@ -363,6 +314,7 @@
   <!-- Control Buttons -->
   <div class="controls">
     <button id="toggleBtn">Start Streaming</button>
+    <button id="analyzeBtn">Describe Scene</button>
   </div>
 
   <!-- Voice Input Section -->
@@ -370,534 +322,443 @@
     <div class="voice-trigger-label">Press Trigger to Take Input</div>
     <button id="micBtn" aria-label="Voice Input">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+        <path
+          d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
       </svg>
     </button>
     <div class="voice-feedback" id="voiceFeedback"></div>
   </div>
 
-<!-- <script>
-const backendURL = "http://192.168.134.214:8000";
+  <script>
+    const backendURL = "http://192.168.134.214:8000";
 
-let streaming = false;
-let intervalId = null;
+    let streaming = false;
+    let intervalId = null;
+    let isListening = false;
+    let recognition = null;
 
-const video = document.getElementById("cam");
-const output = document.getElementById("output");
+    const video = document.getElementById("cam");
+    const output = document.getElementById("output");
+    const micBtn = document.getElementById("micBtn");
+    const voiceFeedback = document.getElementById("voiceFeedback");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
 
-// ---------- 1. Access phone camera (FRONT for now) ----------
-async function startCamera() {
-  try {
-    const constraints = {
-      video: { facingMode: { ideal: "user" } }, // front/selfie camera
-      audio: false,
-    };
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-  } catch (err) {
-    output.innerText = "Camera Error: " + err;
-  }
-}
-
-startCamera();
-
-// ---------- 2. Capture + send frame ----------
-async function sendFrame() {
-  if (!streaming) return;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 640;
-  canvas.height = 480;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  const blob = await new Promise((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.6)
-  );
-
-  const formData = new FormData();
-  formData.append("file", blob, "frame.jpg");
-
-  try {
-    const res = await fetch(`${backendURL}/frame`, {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await res.json();
-    console.log("Data received: "+data.results);
-    handleDetection(data.results);
-  } catch (err) {
-    output.innerText = "Connection Error: " + err;
-  }
-}
-
-// ---------- 3. Handle detection JSON ----------
-function handleDetection(results) {
-  if (!results || results.length === 0) {
-    output.innerHTML = "No detections.";
-    return;
-  }
-
-  const FRAME_WIDTH = 640; // must match capture width
-  const center = FRAME_WIDTH / 2;
-  const margin = FRAME_WIDTH * 0.2;
-
-  function getPosition(bbox) {
-    if (!bbox || bbox.length < 4) return "ahead";
-    const [x1, , x2] = bbox;
-    const cx = (x1 + x2) / 2;
-    if (cx < center - margin) return "on your left";
-    if (cx > center + margin) return "on your right";
-    return "ahead";
-  }
-
-  let text = "";
-  const phrases = [];
-
-  results.forEach((r) => {
-    const pos = getPosition(r.bbox);
-
-    if (r.type === "face") {
-      if (r.name === "unknown") {
-        text += `👤 Unknown person (${pos})<br>`;
-        phrases.push(`Unknown person ${pos}`);
-      } else {
-        text += `🟢 ${r.name} (${pos})<br>`;
-        if (r.announce) {
-          phrases.push(`${r.name} ${pos}`);
-        }
-      }
-    } else if (r.type === "object") {
-      text += `📦 ${r.label} (${pos})<br>`;
-      phrases.push(`${r.label} ${pos}`);
-    }
-  });
-
-  output.innerHTML = text || "No detections.";
-
-  if (phrases.length > 0) {
-    const sentence = phrases.join(", ");
-    speak(sentence);
-  }
-}
-
-// ---------- 4. Text-to-Speech ----------
-function speak(text) {
-  const msg = new SpeechSynthesisUtterance(text);
-  msg.rate = 1.0;
-  msg.pitch = 1.0;
-  msg.volume = 1.0;
-  window.speechSynthesis.speak(msg);
-}
-
-// ---------- 5. Streaming toggle ----------
-document.getElementById("toggleBtn").onclick = () => {
-  streaming = !streaming;
-
-  if (streaming) {
-    intervalId = setInterval(sendFrame, 400); // ~2.5 FPS
-    output.innerText = "Streaming started…";
-    document.getElementById("toggleBtn").innerText = "Stop Streaming";
-  } else {
-    clearInterval(intervalId);
-    output.innerText = "Streaming stopped.";
-    document.getElementById("toggleBtn").innerText = "Start Streaming";
-  }
-};
-
-</script> -->
-
-<script>
-const backendURL = "http://192.168.134.214:8000";
-
-let streaming = false;
-let intervalId = null;
-let isListening = false;
-let recognition = null;
-
-const video = document.getElementById("cam");
-const output = document.getElementById("output");
-const micBtn = document.getElementById("micBtn");
-const voiceFeedback = document.getElementById("voiceFeedback");
-const statusDot = document.getElementById("statusDot");
-const statusText = document.getElementById("statusText");
-
-// ============ EXISTING CAMERA FUNCTIONALITY ============
-
-// ---------- 1. Access phone camera (FRONT for now) ----------
-async function startCamera() {
-  try {
-    const constraints = {
-      video: { facingMode: { ideal: "user" } }, // front/selfie camera
-      audio: false,
-    };
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    updateStatus("Ready", false);
-  } catch (err) {
-    output.innerText = "Camera Error: " + err;
-    updateStatus("Error", false);
-  }
-}
-
-startCamera();
-
-// ---------- 2. Capture + send frame ----------
-async function sendFrame() {
-  if (!streaming) return;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 640;
-  canvas.height = 480;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  const blob = await new Promise((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.6)
-  );
-
-  const formData = new FormData();
-  formData.append("file", blob, "frame.jpg");
-
-  try {
-    const res = await fetch(`${backendURL}/frame`, {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await res.json();
-    console.log("Data received:", data.results);
-    handleDetection(data.results);
-  } catch (err) {
-    output.innerText = "Connection Error: " + err;
-    console.error(err);
-  }
-}
-
-// ---------- 3. Handle detection JSON ----------
-function handleDetection(results) {
-  if (!results || results.length === 0) {
-    output.innerHTML = "<strong>Status:</strong> No detections.";
-    return;
-  }
-
-  const FRAME_WIDTH = 640; // must match capture width
-  const center = FRAME_WIDTH / 2;
-  const margin = FRAME_WIDTH * 0.2;
-
-  function getPosition(bbox) {
-    if (!bbox || bbox.length < 4) return "ahead";
-    const [x1, , x2] = bbox;
-    const cx = (x1 + x2) / 2;
-    if (cx < center - margin) return "on your left";
-    if (cx > center + margin) return "on your right";
-    return "ahead";
-  }
-
-  let text = "<strong>Detected:</strong><br>";
-  const phrases = [];
-
-  results.forEach((r) => {
-    const pos = getPosition(r.bbox);
-
-    if (r.type === "face") {
-      if (r.name === "unknown") {
-        text += `👤 Unknown person (${pos})<br>`;
-        phrases.push(`Unknown person ${pos}`);
-      } else {
-        text += `🟢 ${r.name} (${pos})<br>`;
-        if (r.announce) {
-          phrases.push(`${r.name} ${pos}`);
-        }
-      }
-    } else if (r.type === "object") {
-      text += `📦 ${r.label} (${pos})<br>`;
-      phrases.push(`${r.label} ${pos}`);
-    }
-  });
-
-  output.innerHTML = text || "<strong>Status:</strong> No detections.";
-
-  if (phrases.length > 0) {
-    const sentence = phrases.join(", ");
-    speak(sentence);
-  }
-}
-
-// ---------- 4. Text-to-Speech ----------
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    const msg = new SpeechSynthesisUtterance(text);
-    msg.rate = 1.0;
-    msg.pitch = 1.0;
-    msg.volume = 1.0;
-    window.speechSynthesis.speak(msg);
-  }
-}
-
-// ---------- 5. Streaming toggle ----------
-document.getElementById("toggleBtn").onclick = () => {
-  streaming = !streaming;
-
-  if (streaming) {
-    intervalId = setInterval(sendFrame, 400); // ~2.5 FPS
-    output.innerHTML = "<strong>Status:</strong> Streaming started…";
-    document.getElementById("toggleBtn").innerText = "Stop Streaming";
-    document.getElementById("toggleBtn").classList.add("streaming");
-    updateStatus("Streaming", true);
-  } else {
-    clearInterval(intervalId);
-    output.innerHTML = "<strong>Status:</strong> Streaming stopped.";
-    document.getElementById("toggleBtn").innerText = "Start Streaming";
-    document.getElementById("toggleBtn").classList.remove("streaming");
-    updateStatus("Paused", false);
-  }
-};
-
-// ---------- 6. Status indicator update ----------
-function updateStatus(text, active) {
-  if (statusText) statusText.textContent = text;
-  if (statusDot) {
-    if (active) {
-      statusDot.classList.add('active');
-    } else {
-      statusDot.classList.remove('active');
-    }
-  }
-}
-
-// ============ NEW VOICE INPUT FUNCTIONALITY ============
-
-// ---------- 7. Initialize Speech Recognition ----------
-function initSpeechRecognition() {
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      isListening = true;
-      micBtn.classList.add('listening');
-      voiceFeedback.innerHTML = '<span class="loading"></span> Listening...';
-      console.log('[VOICE] Started listening');
-    };
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      const confidence = event.results[0][0].confidence;
-      
-      console.log(`[VOICE] Recognized: "${transcript}" (confidence: ${confidence})`);
-      voiceFeedback.textContent = `You said: "${transcript}"`;
-      
-      // Send to backend
-      sendVoiceCommand(transcript);
-      
-      // Auto-clear after 3 seconds
-      setTimeout(() => {
-        if (voiceFeedback) voiceFeedback.textContent = '';
-      }, 3000);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('[VOICE] Error:', event.error);
-      
-      let errorMsg = 'Could not recognize speech';
-      if (event.error === 'no-speech') {
-        errorMsg = 'No speech detected';
-      } else if (event.error === 'network') {
-        errorMsg = 'Network error';
-      }
-      
-      voiceFeedback.textContent = `Error: ${errorMsg}`;
-      setTimeout(() => {
-        if (voiceFeedback) voiceFeedback.textContent = '';
-      }, 3000);
-    };
-
-    recognition.onend = () => {
-      isListening = false;
-      micBtn.classList.remove('listening');
-      console.log('[VOICE] Stopped listening');
-    };
-
-    console.log('[VOICE] Speech recognition initialized');
-  } else {
-    console.warn('[VOICE] Speech recognition not supported');
-    if (voiceFeedback) {
-      voiceFeedback.textContent = 'Voice input not supported on this browser';
-    }
-  }
-}
-
-// Initialize on load
-initSpeechRecognition();
-
-// ---------- 8. Microphone button click handler ----------
-if (micBtn) {
-  micBtn.addEventListener('click', () => {
-    if (!recognition) {
-      voiceFeedback.textContent = 'Voice input not available';
-      setTimeout(() => {
-        voiceFeedback.textContent = '';
-      }, 2000);
-      return;
-    }
-
-    if (isListening) {
-      recognition.stop();
-      console.log('[VOICE] Manually stopped');
-    } else {
+    // ---------- 1. Access phone camera ----------
+    async function startCamera() {
       try {
-        recognition.start();
-      } catch (error) {
-        console.error('[VOICE] Start error:', error);
-        // Already running, stop and restart
-        recognition.stop();
-        setTimeout(() => {
+        const constraints = {
+          video: { facingMode: { ideal: "user" } },
+          audio: false,
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        updateStatus("Ready", false);
+      } catch (err) {
+        output.innerHTML = `<strong>Camera Error:</strong> ${err}`;
+        updateStatus("Error", false);
+      }
+    }
+
+    startCamera();
+
+    // ---------- 2. Capture + send frame ----------
+    async function sendFrame() {
+      if (!streaming) return;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.6)
+      );
+
+      const formData = new FormData();
+      formData.append("file", blob, "frame.jpg");
+
+      try {
+        const res = await fetch(`${backendURL}/frame`, {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+        console.log("Data received:", data.results);
+        handleDetection(data.results);
+      } catch (err) {
+        output.innerHTML = `<strong>Connection Error:</strong> ${err}`;
+        console.error(err);
+      }
+    }
+
+    // ---------- 3. Handle detection JSON ----------
+    function handleDetection(results) {
+      if (!results || results.length === 0) {
+        output.innerHTML = "<strong>Status:</strong> No detections.";
+        return;
+      }
+
+      const FRAME_WIDTH = 640;
+      const center = FRAME_WIDTH / 2;
+      const margin = FRAME_WIDTH * 0.2;
+
+      function getPosition(bbox) {
+        if (!bbox || bbox.length < 4) return "ahead";
+        const [x1, , x2] = bbox;
+        const cx = (x1 + x2) / 2;
+        if (cx < center - margin) return "on your left";
+        if (cx > center + margin) return "on your right";
+        return "ahead";
+      }
+
+      let text = "<strong>Detected:</strong><br>";
+      const phrases = [];
+
+      results.forEach((r) => {
+        const pos = getPosition(r.bbox);
+
+        if (r.type === "face") {
+          if (r.name === "unknown") {
+            text += `👤 Unknown person (${pos})<br>`;
+            phrases.push(`Unknown person ${pos}`);
+          } else {
+            text += `🟢 ${r.name} (${pos})<br>`;
+            if (r.announce) {
+              phrases.push(`${r.name} ${pos}`);
+            }
+          }
+        } else if (r.type === "object") {
+          text += `📦 ${r.label} (${pos})<br>`;
+          phrases.push(`${r.label} ${pos}`);
+        }
+      });
+
+      output.innerHTML = text || "<strong>Status:</strong> No detections.";
+
+      if (phrases.length > 0) {
+        const sentence = phrases.join(", ");
+        speak(sentence);
+      }
+    }
+
+    // ---------- 4. Text-to-Speech ----------
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        msg.rate = 1.0;
+        msg.pitch = 1.0;
+        msg.volume = 1.0;
+        window.speechSynthesis.speak(msg);
+      }
+    }
+
+    // ---------- 5. Streaming toggle ----------
+    document.getElementById("toggleBtn").onclick = () => {
+      streaming = !streaming;
+
+      if (streaming) {
+        intervalId = setInterval(sendFrame, 400);
+        output.innerHTML = "<strong>Status:</strong> Streaming started…";
+        document.getElementById("toggleBtn").innerText = "Stop Streaming";
+        updateStatus("Streaming", true);
+      } else {
+        clearInterval(intervalId);
+        output.innerHTML = "<strong>Status:</strong> Streaming stopped.";
+        document.getElementById("toggleBtn").innerText = "Start Streaming";
+        updateStatus("Paused", false);
+      }
+    };
+
+    // ---------- 6. LLM Scene Analysis ----------
+    document.getElementById("analyzeBtn").onclick = async () => {
+      // Pause streaming during analysis
+      if (streaming) {
+        clearInterval(intervalId);
+        streaming = false;
+        document.getElementById("toggleBtn").innerText = "Start Streaming";
+        updateStatus("Analyzing", false);
+      }
+
+      output.innerHTML = "<strong>Status:</strong> Analyzing scene... (Please wait)";
+      speak("Analyzing scene...");
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.8)
+      );
+
+      const formData = new FormData();
+      formData.append("file", blob, "analyze.jpg");
+
+      try {
+        console.log("[CLIENT] Sending /analyze request...");
+        const res = await fetch(`${backendURL}/analyze`, {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+        console.log("[CLIENT] Analysis received:", data.text);
+        output.innerHTML = `<strong>Analysis:</strong> ${data.text}`;
+        speak(data.text);
+      } catch (err) {
+        console.error("[CLIENT] Analysis error:", err);
+        output.innerHTML = `<strong>Analysis Error:</strong> ${err}`;
+        speak("Sorry, I could not analyze the scene.");
+      }
+    };
+
+    // ---------- 7. Status indicator update ----------
+    function updateStatus(text, active) {
+      if (statusText) statusText.textContent = text;
+      if (statusDot) {
+        if (active) {
+          statusDot.classList.add('active');
+        } else {
+          statusDot.classList.remove('active');
+        }
+      }
+    }
+    // ============ NEW VOICE INPUT FUNCTIONALITY ============
+
+    // ---------- 7. Initialize Speech Recognition ----------
+    function initSpeechRecognition() {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          isListening = true;
+          micBtn.classList.add('listening');
+          voiceFeedback.innerHTML = '<span class="loading"></span> Listening...';
+          console.log('[VOICE] Started listening');
+        };
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          const confidence = event.results[0][0].confidence;
+
+          console.log(`[VOICE] Recognized: "${transcript}" (confidence: ${confidence})`);
+          voiceFeedback.textContent = `You said: "${transcript}"`;
+
+          // Send to backend
+          sendVoiceCommand(transcript);
+
+          // Auto-clear after 3 seconds
+          setTimeout(() => {
+            if (voiceFeedback) voiceFeedback.textContent = '';
+          }, 3000);
+        };
+
+        recognition.onerror = (event) => {
+          console.error('[VOICE] Error:', event.error);
+
+          let errorMsg = 'Could not recognize speech';
+          if (event.error === 'no-speech') {
+            errorMsg = 'No speech detected';
+          } else if (event.error === 'network') {
+            errorMsg = 'Network error';
+          }
+
+          voiceFeedback.textContent = `Error: ${errorMsg}`;
+          setTimeout(() => {
+            if (voiceFeedback) voiceFeedback.textContent = '';
+          }, 3000);
+        };
+
+        recognition.onend = () => {
+          isListening = false;
+          micBtn.classList.remove('listening');
+          console.log('[VOICE] Stopped listening');
+        };
+
+        console.log('[VOICE] Speech recognition initialized');
+      } else {
+        console.warn('[VOICE] Speech recognition not supported');
+        if (voiceFeedback) {
+          voiceFeedback.textContent = 'Voice input not supported on this browser';
+        }
+      }
+    }
+
+    // Initialize on load
+    initSpeechRecognition();
+
+    // ---------- 8. Microphone button click handler ----------
+    if (micBtn) {
+      micBtn.addEventListener('click', () => {
+        if (!recognition) {
+          voiceFeedback.textContent = 'Voice input not available';
+          setTimeout(() => {
+            voiceFeedback.textContent = '';
+          }, 2000);
+          return;
+        }
+
+        if (isListening) {
+          recognition.stop();
+          console.log('[VOICE] Manually stopped');
+        } else {
           try {
             recognition.start();
-          } catch (e) {
-            console.error('[VOICE] Restart failed:', e);
+          } catch (error) {
+            console.error('[VOICE] Start error:', error);
+            // Already running, stop and restart
+            recognition.stop();
+            setTimeout(() => {
+              try {
+                recognition.start();
+              } catch (e) {
+                console.error('[VOICE] Restart failed:', e);
+              }
+            }, 300);
           }
-        }, 300);
+        }
+      });
+    }
+
+    // ---------- 9. Send voice command to backend ----------
+    async function sendVoiceCommand(text) {
+      try {
+        const res = await fetch(`${backendURL}/voice-command`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ command: text })
+        });
+
+        const data = await res.json();
+        console.log('[VOICE] Backend response:', data);
+
+        // Handle response
+        if (data.response) {
+          speak(data.response);
+
+          // Show response in output briefly
+          const originalOutput = output.innerHTML;
+          output.innerHTML = `<strong>Voice Command:</strong> "${text}"<br><strong>Response:</strong> ${data.response}`;
+
+          setTimeout(() => {
+            output.innerHTML = originalOutput;
+          }, 3000);
+        }
+
+        // Handle special actions
+        if (data.action) {
+          handleVoiceAction(data.action);
+        }
+
+      } catch (err) {
+        console.error('[VOICE] Backend error:', err);
+        voiceFeedback.textContent = 'Failed to process command';
+        setTimeout(() => {
+          voiceFeedback.textContent = '';
+        }, 2000);
       }
     }
-  });
-}
 
-// ---------- 9. Send voice command to backend ----------
-async function sendVoiceCommand(text) {
-  try {
-    const res = await fetch(`${backendURL}/voice-command`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ command: text })
+    // ---------- 10. Handle voice-triggered actions ----------
+    function handleVoiceAction(action) {
+      console.log('[VOICE] Action:', action);
+
+      switch (action) {
+        case 'start_streaming':
+          if (!streaming) {
+            document.getElementById("toggleBtn").click();
+          }
+          break;
+
+        case 'stop_streaming':
+          if (streaming) {
+            document.getElementById("toggleBtn").click();
+          }
+          break;
+
+        case 'describe_scene':
+          // Force a frame capture and analysis
+          if (streaming) {
+            sendFrame();
+          } else {
+            speak("Please start streaming first");
+          }
+          break;
+
+        case 'start_enrollment':
+          // Redirect to enrollment page or trigger enrollment mode
+          speak("Opening enrollment mode");
+          // window.location.href = '/enroll';  // Uncomment if you have enrollment page
+          break;
+
+        default:
+          console.log('[VOICE] Unknown action:', action);
+      }
+    }
+
+    // ---------- 11. Keyboard shortcuts (optional) ----------
+    document.addEventListener('keydown', (e) => {
+      // Press 'V' to trigger voice input (for testing on desktop)
+      if (e.key === 'v' || e.key === 'V') {
+        if (micBtn && !isListening) {
+          micBtn.click();
+        }
+      }
+
+      // Press 'S' to toggle streaming
+      if (e.key === 's' || e.key === 'S') {
+        document.getElementById("toggleBtn").click();
+      }
     });
 
-    const data = await res.json();
-    console.log('[VOICE] Backend response:', data);
+    // ---------- 12. Prevent screen sleep on mobile (optional) ----------
+    let wakeLock = null;
 
-    // Handle response
-    if (data.response) {
-      speak(data.response);
-      
-      // Show response in output briefly
-      const originalOutput = output.innerHTML;
-      output.innerHTML = `<strong>Voice Command:</strong> "${text}"<br><strong>Response:</strong> ${data.response}`;
-      
-      setTimeout(() => {
-        output.innerHTML = originalOutput;
-      }, 3000);
-    }
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('[WAKELOCK] Screen wake lock activated');
 
-    // Handle special actions
-    if (data.action) {
-      handleVoiceAction(data.action);
-    }
-
-  } catch (err) {
-    console.error('[VOICE] Backend error:', err);
-    voiceFeedback.textContent = 'Failed to process command';
-    setTimeout(() => {
-      voiceFeedback.textContent = '';
-    }, 2000);
-  }
-}
-
-// ---------- 10. Handle voice-triggered actions ----------
-function handleVoiceAction(action) {
-  console.log('[VOICE] Action:', action);
-
-  switch (action) {
-    case 'start_streaming':
-      if (!streaming) {
-        document.getElementById("toggleBtn").click();
+          wakeLock.addEventListener('release', () => {
+            console.log('[WAKELOCK] Screen wake lock released');
+          });
+        } catch (err) {
+          console.error('[WAKELOCK] Error:', err);
+        }
       }
-      break;
+    }
 
-    case 'stop_streaming':
+    // Request wake lock when streaming starts
+    const originalToggle = document.getElementById("toggleBtn").onclick;
+    document.getElementById("toggleBtn").onclick = () => {
+      originalToggle();
+
       if (streaming) {
-        document.getElementById("toggleBtn").click();
+        requestWakeLock();
+      } else if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
       }
-      break;
+    };
 
-    case 'describe_scene':
-      // Force a frame capture and analysis
-      if (streaming) {
-        sendFrame();
-      } else {
-        speak("Please start streaming first");
-      }
-      break;
 
-    case 'start_enrollment':
-      // Redirect to enrollment page or trigger enrollment mode
-      speak("Opening enrollment mode");
-      // window.location.href = '/enroll';  // Uncomment if you have enrollment page
-      break;
 
-    default:
-      console.log('[VOICE] Unknown action:', action);
-  }
-}
-
-// ---------- 11. Keyboard shortcuts (optional) ----------
-document.addEventListener('keydown', (e) => {
-  // Press 'V' to trigger voice input (for testing on desktop)
-  if (e.key === 'v' || e.key === 'V') {
-    if (micBtn && !isListening) {
-      micBtn.click();
-    }
-  }
-  
-  // Press 'S' to toggle streaming
-  if (e.key === 's' || e.key === 'S') {
-    document.getElementById("toggleBtn").click();
-  }
-});
-
-// ---------- 12. Prevent screen sleep on mobile (optional) ----------
-let wakeLock = null;
-
-async function requestWakeLock() {
-  if ('wakeLock' in navigator) {
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-      console.log('[WAKELOCK] Screen wake lock activated');
-      
-      wakeLock.addEventListener('release', () => {
-        console.log('[WAKELOCK] Screen wake lock released');
-      });
-    } catch (err) {
-      console.error('[WAKELOCK] Error:', err);
-    }
-  }
-}
-
-// Request wake lock when streaming starts
-const originalToggle = document.getElementById("toggleBtn").onclick;
-document.getElementById("toggleBtn").onclick = () => {
-  originalToggle();
-  
-  if (streaming) {
-    requestWakeLock();
-  } else if (wakeLock) {
-    wakeLock.release();
-    wakeLock = null;
-  }
-};
-
-</script>
+  </script>
 </body>
+
+
 </html>

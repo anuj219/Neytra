@@ -28,6 +28,8 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+from ai.llm import generate_scene_description
+
 @app.post("/frame")
 async def receive_frame(file: UploadFile = File(...)):
     img_bytes = await file.read()
@@ -39,6 +41,24 @@ async def receive_frame(file: UploadFile = File(...)):
     results = process_frame(frame)
 
     return {"results": results}
+
+@app.post("/analyze")
+async def analyze_scene(file: UploadFile = File(...)):
+    """
+    Endpoint for LLM-based scene analysis.
+    Receives an image, sends it to Gemini, and returns the description.
+    """
+    print("[API] Received /analyze request")
+    img_bytes = await file.read()
+    
+    # Simulate a prompt for now (as per requirements)
+    # In the future, this could come from the client (audio transcription)
+    prompt = "In one short sentence, describe what objects and environment are visible in this scene, focusing on what's useful for navigation and awareness."
+    
+    description = generate_scene_description(img_bytes, prompt)
+    print(f"[API] Sending response: {description[:50]}...")
+    
+    return {"text": description}
 
 
 @app.get("/")

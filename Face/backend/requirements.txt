@@ -9,3 +9,5 @@ python-multipart
 ultralytics
 speechrecognition
 keyboard
+google-generativeai
+python-dotenv
