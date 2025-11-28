@@ -77,6 +77,7 @@ import io
 import os
 import json
 from groq import Groq
+from dotenv import load_dotenv
 
 app = FastAPI()
 
@@ -84,13 +85,28 @@ app = FastAPI()
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FACE_DIR = os.path.dirname(BACKEND_DIR)
 MOBILE_CLIENT_DIR = os.path.join(FACE_DIR, "mobile-client")
+ENV_PATH = os.path.join(FACE_DIR, ".env")
 
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 # ============ GROQ SETUP ============
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # Add your Groq API key
+load_dotenv(ENV_PATH)
+
+print(f"[ENV] Loading from: {ENV_PATH}")
+print(f"[ENV] File exists: {os.path.exists(ENV_PATH)}")
+
+# ============ GROQ SETUP ============
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY or GROQ_API_KEY == "":
+    print("⚠️  WARNING: GROQ_API_KEY not found!")
+    print(f"   Checked: {ENV_PATH}")
+    print("   Make sure your .env file contains: GROQ_API_KEY=your-key-here")
+else:
+    print(f"✓ GROQ_API_KEY loaded successfully (length: {len(GROQ_API_KEY)})")
+
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ============ DATA MODELS ============
