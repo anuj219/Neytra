@@ -285,7 +285,7 @@
     // =============================================
     // CONFIGURATION
     // =============================================
-    const backendURL = "http://192.168.134.28:8000";
+    const backendURL = "http://192.168.134.214:8000";
 
     // =============================================
     // STATE MANAGEMENT
@@ -803,8 +803,8 @@
         case 'vision':
           // For vision mode, capture frame and send with prompt
           switchMode('vision');
-          output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Status:</strong> Analyzing...;
-          speak('Let me analyze that')`;
+          output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Status:</strong> Analyzing...`;
+          speak('Let me analyze that');
 
           try {
             const canvas = document.createElement("canvas");
@@ -832,8 +832,8 @@
 
             const result = await response.json();
 
-            output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.description};
-            speak(result.description)`;
+            output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.description}`;
+            speak(result.description);
 
           } catch (err) {
             console.error('[VISION ERROR]', err);

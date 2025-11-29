@@ -81,9 +81,10 @@ from groq import Groq
 from dotenv import load_dotenv
 from ai.llm import generate_scene_description
 from ai.navigation import get_navigation_guidance
+from ai.detector import yolo_model
 
 app = FastAPI()
-
+yolo_model()
 # ============ PATH SETUP ============
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FACE_DIR = os.path.dirname(BACKEND_DIR)
