@@ -69,7 +69,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Optional
 from ai.pipeline import process_frame
 from PIL import Image
 import numpy as np
@@ -119,8 +119,50 @@ class VoiceCommand(BaseModel):
 
 
 class ModeResponse(BaseModel):
-    mode: str = None
-    prompt: str = None
+    mode: str
+    prompt: Optional[str] = None
+    endpoint: Optional[str] = None
+
+# ========================
+# MODE → ENDPOINT MAPPING
+# ========================
+
+MODE_ENDPOINT_MAP = {
+    "scan": "/api/scan",
+    "quickscan": "/api/quickscan",
+    "face": "/api/face",
+    "vision": "/api/vision"
+}
+
+# ========================
+# VOICE COMMAND → MODE DETECTION
+# ========================
+
+@app.post("/voice-command", response_model=ModeResponse)
+async def process_voice_command(voice_input: VoiceCommand):
+    """
+    Process voice command and determine intent using Groq LLM.
+    Returns the mode and which endpoint to call next.
+    """
+    command = voice_input.command
+    print(f"\n[VOICE] Received: '{command}'")
+
+    # Use Groq for intent detection
+    mode_data = detect_mode_groq(command)
+
+    # Add the endpoint to call
+    mode = mode_data.get("mode")
+    endpoint = MODE_ENDPOINT_MAP.get(mode, "/api/scan")
+    mode_data["endpoint"] = endpoint
+
+    print(f"[MODE] → {mode}")
+    print(f"[ENDPOINT] → {endpoint}")
+    if "prompt" in mode_data and mode_data["prompt"]:
+        print(f"[PROMPT] → {mode_data['prompt']}")
+    print(f"{'='*60}\n")
+    
+    return ModeResponse(**mode_data)
+
 
 
 # ============ GROQ INTENT DETECTION ============
@@ -304,7 +346,136 @@ def fallback_intent(command: str) -> dict:
 
 
 # ============ API ENDPOINTS ============
-@app.post("/analyze")
+
+@app.post("/api/scan")
+async def scan_endpoint(file: UploadFile = File(...)):
+    """
+    SCAN MODE: Standard object detection
+    Frontend sends image every 10 seconds
+    Returns detected objects and their locations
+    """
+    try:
+        print("\n[API] /api/scan - Processing frame")
+        
+        # Read and convert image
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame_rgb = np.array(img)
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        # Process with scan mode
+        results = process_frame_scan(frame)
+
+        return JSONResponse({
+            "mode": "scan",
+            "status": "success",
+            "detections": results,
+            "count": len(results)
+        })
+    
+    except Exception as e:
+        print(f"[SCAN ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/quickscan")
+async def quickscan_endpoint(file: UploadFile = File(...)):
+    """
+    QUICKSCAN MODE: Fast object detection for urgent scenarios
+    Optimized for speed, prioritizes obstacles and people
+    """
+    try:
+        print("\n[API] /api/quickscan - Fast processing")
+        
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame_rgb = np.array(img)
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        # Process with quickscan mode
+        results = process_frame_quickscan(frame)
+
+        return JSONResponse({
+            "mode": "quickscan",
+            "status": "success",
+            "detections": results,
+            "count": len(results),
+            "priority": "high"
+        })
+    
+    except Exception as e:
+        print(f"[QUICKSCAN ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/face")
+async def face_recognition_endpoint(file: UploadFile = File(...)):
+    """
+    FACE RECOGNITION MODE: Identify known faces or enroll new ones
+    Returns recognized faces from database
+    """
+    try:
+        print("\n[API] /api/face - Face recognition")
+        
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame_rgb = np.array(img)
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        # Process with face recognition mode
+        results = process_frame_face(frame)
+
+        # Separate faces and objects
+        faces = [r for r in results if r["type"] == "face"]
+        objects = [r for r in results if r["type"] == "object"]
+
+        return JSONResponse({
+            "mode": "face",
+            "status": "success",
+            "faces": faces,
+            "objects": objects,
+            "total_detections": len(results)
+        })
+    
+    except Exception as e:
+        print(f"[FACE ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# @app.post("/api/vision")
+# async def vision_llm_endpoint(
+#     file: UploadFile = File(...),
+#     prompt: str = Form(None)
+# ):
+#     """
+#     VISION LLM MODE: AI reasoning about the scene
+#     Uses vision model to answer questions about the image
+#     """
+#     try:
+#         print(f"\n[API] /api/vision - LLM analysis")
+#         print(f"[PROMPT] {prompt}")
+        
+#         img_bytes = await file.read()
+        
+#         # Use custom prompt if provided, otherwise use default
+#         if not prompt:
+#             prompt = "Describe what you see in this image, focusing on objects and environment useful for navigation."
+        
+#         # Call vision LLM
+#         description = generate_scene_description(img_bytes, prompt)
+        
+#         return JSONResponse({
+#             "mode": "vision",
+#             "status": "success",
+#             "prompt": prompt,
+#             "description": description
+#         })
+    
+#     except Exception as e:
+#         print(f"[VISION ERROR] {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/vision")
 async def analyze_scene(file: UploadFile = File(...)):
     """
     Endpoint for LLM-based scene analysis.
@@ -321,6 +492,8 @@ async def analyze_scene(file: UploadFile = File(...)):
     print(f"[API] Sending response: {description[:50]}...")
     
     return {"text": description}
+
+
 
 @app.post("/frame")
 async def receive_frame(file: UploadFile = File(...)):

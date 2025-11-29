@@ -1,12 +1,10 @@
+
 <!DOCTYPE html>
-<html>
-
-
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neytra Mobile Client</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>👓 Neytra - Smart Assistant</title>
   <style>
     * {
       margin: 0;
@@ -16,62 +14,73 @@
 
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
-      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
+      padding: 10px;
     }
 
     .header {
       text-align: center;
-      padding: 20px;
-      background: rgba(0, 212, 255, 0.1);
-      border-radius: 15px;
+      color: white;
       margin-bottom: 20px;
     }
 
     .header h1 {
-      font-size: 32px;
-      background: linear-gradient(135deg, #00d4ff, #0099ff);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-size: 2.5em;
       margin-bottom: 5px;
     }
 
     .header p {
-      font-size: 14px;
-      color: #aaa;
+      font-size: 1em;
+      opacity: 0.9;
     }
 
+    /* Mode Display */
+    .mode-display {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 15px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .mode-display h2 {
+      color: #667eea;
+      font-size: 1.3em;
+      margin-bottom: 5px;
+    }
+
+    .mode-display .mode-description {
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    /* Video Container */
     .video-container {
       position: relative;
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto 20px;
-      border-radius: 20px;
-      overflow: hidden;
       background: #000;
-      box-shadow: 0 10px 40px rgba(0, 212, 255, 0.3);
+      border-radius: 15px;
+      overflow: hidden;
+      margin-bottom: 15px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.3);
     }
 
-    video {
+    #cam {
       width: 100%;
       display: block;
     }
 
     .video-overlay {
       position: absolute;
-      top: 15px;
-      right: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      top: 10px;
+      right: 10px;
       background: rgba(0, 0, 0, 0.7);
       padding: 8px 15px;
       border-radius: 20px;
-      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .status-dot {
@@ -79,122 +88,92 @@
       height: 10px;
       border-radius: 50%;
       background: #ff4444;
+      animation: pulse 2s infinite;
     }
 
     .status-dot.active {
-      background: #00ff00;
-      box-shadow: 0 0 10px #00ff00;
+      background: #44ff44;
     }
 
+    .video-overlay span {
+      color: white;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+
+    /* Output Display */
     #output {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(0, 212, 255, 0.3);
+      background: white;
       border-radius: 15px;
-      padding: 20px;
-      margin: 0 auto 20px;
-      max-width: 600px;
-      width: 100%;
-      min-height: 80px;
-      font-size: 16px;
+      padding: 15px;
+      margin-bottom: 15px;
+      min-height: 100px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
     }
 
+    #output strong {
+      color: #667eea;
+    }
+
+    /* Controls */
     .controls {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
     }
 
-    button {
-      padding: 12px 24px;
+    .controls button {
+      padding: 15px;
       border: none;
       border-radius: 10px;
-      font-size: 16px;
+      font-size: 1em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
-      background: linear-gradient(135deg, #00d4ff, #0099ff);
+      background: white;
+      color: #667eea;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+
+    .controls button:active {
+      transform: translateY(2px);
+    }
+
+    .controls button.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
     }
 
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
-    }
-
-    button:active {
-      transform: translateY(0);
-    }
-
-    #analyzeBtn {
-      background: linear-gradient(135deg, #673AB7, #512DA8);
-    }
-
-    #analyzeBtn:hover {
-      box-shadow: 0 6px 20px rgba(103, 58, 183, 0.4);
-    }
-
-    #toggleBtn.streaming {
-      background: linear-gradient(135deg, #ff4444, #cc0000);
-    }
-
-    /* Voice Input Section */
+    /* Voice Section */
     .voice-section {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      align-items: center;
-      padding-bottom: 30px;
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
     }
 
     .voice-trigger-label {
-      font-size: 14px;
-      color: #aaa;
+      color: #667eea;
+      font-weight: 600;
       margin-bottom: 15px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
+      font-size: 1.1em;
     }
 
     #micBtn {
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #00d4ff, #0099ff);
-      border: 4px solid rgba(0, 212, 255, 0.3);
+      border: none;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
       display: flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      position: relative;
-    }
-
-    #micBtn:hover {
-      transform: scale(1.1);
-      box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
-    }
-
-    #micBtn:active {
-      transform: scale(0.95);
-    }
-
-    #micBtn.listening {
-      background: linear-gradient(135deg, #ff4444, #cc0000);
-      animation: mic-pulse 1s infinite;
-    }
-
-    @keyframes mic-pulse {
-
-      0%,
-      100% {
-        box-shadow: 0 0 20px rgba(255, 68, 68, 0.6);
-      }
-
-      50% {
-        box-shadow: 0 0 40px rgba(255, 68, 68, 1);
-      }
+      margin: 0 auto 15px;
     }
 
     #micBtn svg {
@@ -203,100 +182,64 @@
       fill: white;
     }
 
+    #micBtn:hover {
+      transform: scale(1.05);
+    }
+
+    #micBtn:active {
+      transform: scale(0.95);
+    }
+
+    #micBtn.listening {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      animation: pulse 1.5s infinite;
+    }
+
     .voice-feedback {
-      margin-top: 15px;
-      font-size: 14px;
-      color: #00d4ff;
-      min-height: 20px;
+      min-height: 30px;
+      color: #666;
+      font-size: 0.95em;
     }
 
-    /* Responsive Design */
-    @media (max-width: 768px) {
-      body {
-        padding: 10px;
-      }
-
-      .header h1 {
-        font-size: 24px;
-      }
-
-      .header p {
-        font-size: 12px;
-      }
-
-      .video-container {
-        border-radius: 15px;
-      }
-
-      #output {
-        font-size: 14px;
-        padding: 15px;
-      }
-
-      button {
-        padding: 10px 20px;
-        font-size: 14px;
-      }
-
-      #micBtn {
-        width: 70px;
-        height: 70px;
-      }
-
-      #micBtn svg {
-        width: 30px;
-        height: 30px;
-      }
-
-      .voice-trigger-label {
-        font-size: 12px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .header {
-        padding: 15px;
-      }
-
-      .header h1 {
-        font-size: 20px;
-      }
-
-      .controls {
-        gap: 10px;
-      }
-
-      button {
-        padding: 10px 15px;
-        font-size: 13px;
-      }
-    }
-
-    /* Loading Animation */
     .loading {
       display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: #00d4ff;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      background: #667eea;
+      animation: pulse 1s infinite;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .header h1 {
+        font-size: 2em;
+      }
+      
+      .controls {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
-
 <body>
 
   <div class="header">
     <h1>👓 Neytra</h1>
-    <p>Smart Glasses Simulation</p>
+    <p>Agentic AI Assistant</p>
   </div>
+
+  <!-- Mode Display -->
+  <div class="mode-display">
+    <h2 id="currentMode">SCAN MODE</h2>
+    <p class="mode-description" id="modeDescription">Standard object detection every 10 seconds</p>
+  </div>
+
   <!-- Video Container -->
   <div class="video-container">
     <video id="cam" autoplay playsinline muted></video>
@@ -308,98 +251,175 @@
 
   <!-- Output Display -->
   <div id="output">
-    <strong>Status:</strong> Waiting for frames...
+    <strong>Status:</strong> Waiting for input...
   </div>
 
   <!-- Control Buttons -->
   <div class="controls">
-    <button id="toggleBtn">Start Streaming</button>
-    <button id="analyzeBtn">Describe Scene</button>
+    <button id="toggleBtn">Start Scan Mode</button>
+    <button id="analyzeBtn">Analyze Scene</button>
   </div>
 
   <!-- Voice Input Section -->
   <div class="voice-section">
-    <div class="voice-trigger-label">Press Trigger to Take Input</div>
+    <div class="voice-trigger-label">Press to Give Voice Command</div>
     <button id="micBtn" aria-label="Voice Input">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
         <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-        <path
-          d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
       </svg>
     </button>
     <div class="voice-feedback" id="voiceFeedback"></div>
   </div>
 
   <script>
+    // =============================================
+    // CONFIGURATION
+    // =============================================
     const backendURL = "http://192.168.134.214:8000";
 
+    // =============================================
+    // STATE MANAGEMENT
+    // =============================================
     let streaming = false;
     let intervalId = null;
     let isListening = false;
     let recognition = null;
+    let currentMode = 'scan'; // scan, quickscan, face, vision
+    let isProcessing = false;
 
+    // =============================================
+    // DOM ELEMENTS
+    // =============================================
     const video = document.getElementById("cam");
     const output = document.getElementById("output");
     const micBtn = document.getElementById("micBtn");
     const voiceFeedback = document.getElementById("voiceFeedback");
     const statusDot = document.getElementById("statusDot");
     const statusText = document.getElementById("statusText");
+    const currentModeDisplay = document.getElementById("currentMode");
+    const modeDescription = document.getElementById("modeDescription");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const analyzeBtn = document.getElementById("analyzeBtn");
 
-    // ---------- 1. Access phone camera ----------
+    // =============================================
+    // MODE CONFIGURATION
+    // =============================================
+    const MODE_CONFIG = {
+      scan: {
+        endpoint: '/api/scan',
+        interval: 10000, // 10 seconds
+        name: 'SCAN MODE',
+        description: 'Standard object detection every 10 seconds'
+      },
+      quickscan: {
+        endpoint: '/api/quickscan',
+        interval: 2000, // 2 seconds for urgent scenarios
+        name: 'QUICK SCAN MODE',
+        description: 'Fast detection for urgent scenarios'
+      },
+      face: {
+        endpoint: '/api/face',
+        interval: 5000, // 5 seconds
+        name: 'FACE RECOGNITION MODE',
+        description: 'Identifying people around you'
+      },
+      vision: {
+        endpoint: '/api/vision',
+        interval: null, // One-shot only
+        name: 'VISION MODE',
+        description: 'AI analysis of the scene'
+      }
+    };
+
+    // =============================================
+    // 1. CAMERA INITIALIZATION
+    // =============================================
     async function startCamera() {
       try {
         const constraints = {
-          video: { facingMode: { ideal: "user" } },
+          video: { facingMode: { ideal: "environment" } }, // Back camera
           audio: false,
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
         updateStatus("Ready", false);
+        console.log('[CAMERA] Started successfully');
       } catch (err) {
         output.innerHTML = `<strong>Camera Error:</strong> ${err}`;
         updateStatus("Error", false);
+        console.error('[CAMERA ERROR]', err);
       }
     }
 
+    // Initialize camera on load
     startCamera();
 
-    // ---------- 2. Capture + send frame ----------
-    async function sendFrame() {
-      if (!streaming) return;
+    // =============================================
+    // 2. FRAME CAPTURE AND SEND
+    // =============================================
+    async function captureAndSendFrame() {
+      if (!streaming || isProcessing) return;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const blob = await new Promise((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", 0.6)
-      );
-
-      const formData = new FormData();
-      formData.append("file", blob, "frame.jpg");
+      isProcessing = true;
 
       try {
-        const res = await fetch(`${backendURL}/frame`, {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.7)
+        );
+
+        const formData = new FormData();
+        formData.append("file", blob, "frame.jpg");
+
+        const endpoint = MODE_CONFIG[currentMode].endpoint;
+        console.log(`[${currentMode.toUpperCase()}] Sending frame to ${endpoint}`);
+
+        const res = await fetch(`${backendURL}${endpoint}`, {
           method: "POST",
           body: formData
         });
 
         const data = await res.json();
-        console.log("Data received:", data.results);
-        handleDetection(data.results);
+        console.log(`[${currentMode.toUpperCase()}] Response:, data`);
+
+        handleModeResponse(data);
+
       } catch (err) {
         output.innerHTML = `<strong>Connection Error:</strong> ${err}`;
-        console.error(err);
+        console.error('[FRAME ERROR]', err);
+      } finally {
+        isProcessing = false;
       }
     }
 
-    // ---------- 3. Handle detection JSON ----------
-    function handleDetection(results) {
-      if (!results || results.length === 0) {
-        output.innerHTML = "<strong>Status:</strong> No detections.";
+    // =============================================
+    // 3. MODE-SPECIFIC RESPONSE HANDLING
+    // =============================================
+    function handleModeResponse(data) {
+      switch (currentMode) {
+        case 'scan':
+        case 'quickscan':
+          handleObjectDetection(data);
+          break;
+        case 'face':
+          handleFaceRecognition(data);
+          break;
+        case 'vision':
+          handleVisionAnalysis(data);
+          break;
+      }
+    }
+
+    function handleObjectDetection(data) {
+      if (!data.detections || data.detections.length === 0) {
+        output.innerHTML = "<strong>Status:</strong> No objects detected.";
         return;
       }
 
@@ -416,29 +436,22 @@
         return "ahead";
       }
 
-      let text = "<strong>Detected:</strong><br>";
+      let text = `<strong>Detected (${data.mode}):</strong><br>`;
       const phrases = [];
 
-      results.forEach((r) => {
-        const pos = getPosition(r.bbox);
-
-        if (r.type === "face") {
-          if (r.name === "unknown") {
-            text += `👤 Unknown person (${pos})<br>`;
-            phrases.push(`Unknown person ${pos}`);
-          } else {
-            text += `🟢 ${r.name} (${pos})<br>`;
-            if (r.announce) {
-              phrases.push(`${r.name} ${pos}`);
-            }
-          }
-        } else if (r.type === "object") {
-          text += `📦 ${r.label} (${pos})<br>`;
-          phrases.push(`${r.label} ${pos}`);
+      data.detections.forEach((det) => {
+        const pos = getPosition(det.bbox);
+        const priority = det.priority ? '⚠ ' : '';
+        const confidence = det.confidence ? `${(det.confidence * 100).toFixed(0)}%` : '';
+        
+        text += `${priority}📦 ${det.label} ${pos} ${confidence}<br>`;
+        
+        if (det.priority || currentMode === 'quickscan') {
+          phrases.push( `${det.label} ${pos}`);
         }
       });
 
-      output.innerHTML = text || "<strong>Status:</strong> No detections.";
+      output.innerHTML = text;
 
       if (phrases.length > 0) {
         const sentence = phrases.join(", ");
@@ -446,7 +459,50 @@
       }
     }
 
-    // ---------- 4. Text-to-Speech ----------
+    function handleFaceRecognition(data) {
+      let text = "<strong>Face Recognition:</strong><br>";
+      const phrases = [];
+
+      if (data.faces && data.faces.length > 0) {
+        data.faces.forEach((face) => {
+          const icon = face.name === 'unknown' ? '❓' : '👤';
+          text += `${icon} ${face.name}<br>`;
+          
+          if (face.announce && face.name !== 'unknown') {
+            phrases.push(face.name);
+          }
+        });
+      }
+
+      if (data.objects && data.objects.length > 0) {
+        data.objects.forEach((obj) => {
+          text += `📦 ${obj.label}<br>`;
+        });
+      }
+
+      if (!data.faces?.length && !data.objects?.length) {
+        text += "No faces or objects detected.";
+      }
+
+      output.innerHTML = text;
+
+      if (phrases.length > 0) {
+        speak(phrases.join(", ") + " detected");
+      }
+    }
+
+    function handleVisionAnalysis(data) {
+      if (data.description) {
+        output.innerHTML = `<strong>Vision Analysis:</strong><br>${data.description}`;
+        speak(data.description);
+      } else {
+        output.innerHTML = "<strong>Error:</strong> No analysis received.";
+      }
+    }
+
+    // =============================================
+    // 4. TEXT-TO-SPEECH
+    // =============================================
     function speak(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -458,81 +514,100 @@
       }
     }
 
-    // ---------- 5. Streaming toggle ----------
-    document.getElementById("toggleBtn").onclick = () => {
-      streaming = !streaming;
-
+    // =============================================
+    // 5. MODE SWITCHING
+    // =============================================
+    function switchMode(newMode) {
+      // Stop current streaming
       if (streaming) {
-        intervalId = setInterval(sendFrame, 400);
-        output.innerHTML = "<strong>Status:</strong> Streaming started…";
-        document.getElementById("toggleBtn").innerText = "Stop Streaming";
-        updateStatus("Streaming", true);
-      } else {
-        clearInterval(intervalId);
-        output.innerHTML = "<strong>Status:</strong> Streaming stopped.";
-        document.getElementById("toggleBtn").innerText = "Start Streaming";
-        updateStatus("Paused", false);
-      }
-    };
-
-    // ---------- 6. LLM Scene Analysis ----------
-    document.getElementById("analyzeBtn").onclick = async () => {
-      // Pause streaming during analysis
-      if (streaming) {
-        clearInterval(intervalId);
-        streaming = false;
-        document.getElementById("toggleBtn").innerText = "Start Streaming";
-        updateStatus("Analyzing", false);
+        stopStreaming();
       }
 
-      output.innerHTML = "<strong>Status:</strong> Analyzing scene... (Please wait)";
-      speak("Analyzing scene...");
+      // Update mode
+      currentMode = newMode;
+      const config = MODE_CONFIG[newMode];
 
-      const canvas = document.createElement("canvas");
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Update UI
+      currentModeDisplay.textContent = config.name;
+      modeDescription.textContent = config.description;
 
-      const blob = await new Promise((resolve) =>
-        canvas.toBlob(resolve, "image/jpeg", 0.8)
-      );
-
-      const formData = new FormData();
-      formData.append("file", blob, "analyze.jpg");
-
-      try {
-        console.log("[CLIENT] Sending /analyze request...");
-        const res = await fetch(`${backendURL}/analyze`, {
-          method: "POST",
-          body: formData
-        });
-
-        const data = await res.json();
-        console.log("[CLIENT] Analysis received:", data.text);
-        output.innerHTML = `<strong>Analysis:</strong> ${data.text}`;
-        speak(data.text);
-      } catch (err) {
-        console.error("[CLIENT] Analysis error:", err);
-        output.innerHTML = `<strong>Analysis Error:</strong> ${err}`;
-        speak("Sorry, I could not analyze the scene.");
-      }
-    };
-
-    // ---------- 7. Status indicator update ----------
-    function updateStatus(text, active) {
-      if (statusText) statusText.textContent = text;
-      if (statusDot) {
-        if (active) {
-          statusDot.classList.add('active');
-        } else {
-          statusDot.classList.remove('active');
-        }
-      }
+      console.log(`[MODE] Switched to ${newMode}`);
     }
-    // ============ NEW VOICE INPUT FUNCTIONALITY ============
 
-    // ---------- 7. Initialize Speech Recognition ----------
+    function startStreaming() {
+      if (streaming) return;
+
+      const config = MODE_CONFIG[currentMode];
+      
+      if (!config.interval) {
+        // One-shot mode (vision)
+        captureAndSendFrame();
+        return;
+      }
+
+      streaming = true;
+      toggleBtn.textContent = `Stop ${config.name}`;
+      toggleBtn.classList.add('active');
+      updateStatus(`${config.name} Active, true`);
+
+      // Immediate first frame
+      captureAndSendFrame();
+
+      // Then periodic updates
+      intervalId = setInterval(captureAndSendFrame, config.interval);
+
+      console.log(`[STREAMING] Started in ${currentMode} mode (${config.interval}ms interval)`);
+    }
+
+    function stopStreaming() {
+      if (!streaming) return;
+
+      streaming = false;
+      clearInterval(intervalId);
+      intervalId = null;
+
+      toggleBtn.textContent = 'Start Scan Mode';
+      toggleBtn.classList.remove('active');
+      updateStatus("Paused", false);
+
+      console.log('[STREAMING] Stopped');
+    }
+
+    // =============================================
+    // 6. BUTTON HANDLERS
+    // =============================================
+    toggleBtn.onclick = () => {
+      if (streaming) {
+        stopStreaming();
+      } else {
+        startStreaming();
+      }
+    };
+
+    analyzeBtn.onclick = async () => {
+      // Stop current streaming
+      if (streaming) {
+        stopStreaming();
+      }
+
+      // Switch to vision mode temporarily
+      const previousMode = currentMode;
+      currentMode = 'vision';
+
+      output.innerHTML = "<strong>Status:</strong> Analyzing scene...";
+      speak("Analyzing scene");
+      updateStatus("Analyzing", false);
+
+      await captureAndSendFrame();
+
+      // Return to previous mode
+      currentMode = previousMode;
+      updateStatus("Ready", false);
+    };
+
+    // =============================================
+    // 7. SPEECH RECOGNITION
+    // =============================================
     function initSpeechRecognition() {
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -550,15 +625,13 @@
 
         recognition.onresult = (event) => {
           const transcript = event.results[0][0].transcript;
-          const confidence = event.results[0][0].confidence;
-
-          console.log(`[VOICE] Recognized: "${transcript}" (confidence: ${confidence})`);
+          console.log(`[VOICE] Recognized: "${transcript}"`);
           voiceFeedback.textContent = `You said: "${transcript}"`;
 
-          // Send to backend
-          sendVoiceCommand(transcript);
+          // Send to backend for intent detection
+          processVoiceCommand(transcript);
 
-          // Auto-clear after 3 seconds
+          // Auto-clear feedback after 3 seconds
           setTimeout(() => {
             if (voiceFeedback) voiceFeedback.textContent = '';
           }, 3000);
@@ -572,6 +645,8 @@
             errorMsg = 'No speech detected';
           } else if (event.error === 'network') {
             errorMsg = 'Network error';
+          } else if (event.error === 'aborted') {
+            errorMsg = 'Recognition aborted';
           }
 
           voiceFeedback.textContent = `Error: ${errorMsg}`;
@@ -587,18 +662,22 @@
         };
 
         console.log('[VOICE] Speech recognition initialized');
+        return true;
       } else {
         console.warn('[VOICE] Speech recognition not supported');
         if (voiceFeedback) {
           voiceFeedback.textContent = 'Voice input not supported on this browser';
         }
+        return false;
       }
     }
 
-    // Initialize on load
+    // Initialize speech recognition on load
     initSpeechRecognition();
 
-    // ---------- 8. Microphone button click handler ----------
+    // =============================================
+    // 8. MICROPHONE BUTTON HANDLER
+    // =============================================
     if (micBtn) {
       micBtn.addEventListener('click', () => {
         if (!recognition) {
@@ -631,87 +710,148 @@
       });
     }
 
-    // ---------- 9. Send voice command to backend ----------
-    async function sendVoiceCommand(text) {
+    // =============================================
+    // 9. PROCESS VOICE COMMAND
+    // =============================================
+    async function processVoiceCommand(command) {
       try {
-        const res = await fetch(`${backendURL}/voice-command`, {
+        console.log('[VOICE] Processing command:', command);
+        
+        // Show processing state
+        voiceFeedback.innerHTML = '<span class="loading"></span> Processing...';
+
+        // Step 1: Send command to backend for intent detection
+        const response = await fetch(`${backendURL}/voice-command`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ command: text })
+          body: JSON.stringify({ command: command })
         });
 
-        const data = await res.json();
-        console.log('[VOICE] Backend response:', data);
-
-        // Handle response
-        if (data.response) {
-          speak(data.response);
-
-          // Show response in output briefly
-          const originalOutput = output.innerHTML;
-          output.innerHTML = `<strong>Voice Command:</strong> "${text}"<br><strong>Response:</strong> ${data.response}`;
-
-          setTimeout(() => {
-            output.innerHTML = originalOutput;
-          }, 3000);
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
         }
 
-        // Handle special actions
-        if (data.action) {
-          handleVoiceAction(data.action);
-        }
+        const modeData = await response.json();
+        console.log('[VOICE] Backend response:', modeData);
+
+        // Step 2: Handle the detected mode
+        await handleVoiceMode(modeData, command);
+
+        // Clear feedback
+        voiceFeedback.textContent = '';
 
       } catch (err) {
-        console.error('[VOICE] Backend error:', err);
+        console.error('[VOICE] Processing error:', err);
         voiceFeedback.textContent = 'Failed to process command';
+        speak('Sorry, I could not process that command');
+        
         setTimeout(() => {
           voiceFeedback.textContent = '';
         }, 2000);
       }
     }
 
-    // ---------- 10. Handle voice-triggered actions ----------
-    function handleVoiceAction(action) {
-      console.log('[VOICE] Action:', action);
+    // =============================================
+    // 10. HANDLE VOICE-DETECTED MODE
+    // =============================================
+    async function handleVoiceMode(modeData, originalCommand) {
+      const { mode, prompt, endpoint } = modeData;
 
-      switch (action) {
-        case 'start_streaming':
-          if (!streaming) {
-            document.getElementById("toggleBtn").click();
-          }
+      console.log(`[VOICE] Switching to mode: ${mode}`);
+
+      // Stop current streaming
+      if (streaming) {
+        stopStreaming();
+      }
+
+      switch (mode) {
+        case 'scan':
+          switchMode('scan');
+          startStreaming();
+          speak('Scan mode activated');
           break;
 
-        case 'stop_streaming':
-          if (streaming) {
-            document.getElementById("toggleBtn").click();
-          }
+        case 'quickscan':
+          switchMode('quickscan');
+          startStreaming();
+          speak('Quick scan mode activated. Watching for obstacles.');
           break;
 
-        case 'describe_scene':
-          // Force a frame capture and analysis
-          if (streaming) {
-            sendFrame();
-          } else {
-            speak("Please start streaming first");
-          }
+        case 'face':
+          switchMode('face');
+          startStreaming();
+          speak('Face recognition mode activated');
           break;
 
-        case 'start_enrollment':
-          // Redirect to enrollment page or trigger enrollment mode
-          speak("Opening enrollment mode");
-          // window.location.href = '/enroll';  // Uncomment if you have enrollment page
+        case 'vision':
+          // For vision mode, capture frame and send with prompt
+          switchMode('vision');
+          output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Status:</strong> Analyzing...;
+          speak('Let me analyze that')`;
+
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = 640;
+            canvas.height = 480;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const blob = await new Promise((resolve) =>
+              canvas.toBlob(resolve, "image/jpeg", 0.8)
+            );
+
+            const formData = new FormData();
+            formData.append("file", blob, "frame.jpg");
+            
+            // Add the prompt from LLM
+            if (prompt) {
+              formData.append("prompt", prompt);
+            }
+
+            const response = await fetch(`${backendURL}${endpoint}`, {
+              method: 'POST',
+              body: formData
+            });
+
+            const result = await response.json();
+            
+            output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.description};
+            speak(result.description)`;
+
+          } catch (err) {
+            console.error('[VISION ERROR]', err);
+            output.innerHTML = `<strong>Error:</strong> Failed to analyze scene`;
+            speak('Sorry, I could not analyze the scene');
+          }
           break;
 
         default:
-          console.log('[VOICE] Unknown action:', action);
+          console.log('[VOICE] Unknown mode:', mode);
+          speak('I did not understand that command');
       }
     }
 
-    // ---------- 11. Keyboard shortcuts (optional) ----------
+    // =============================================
+    // 11. STATUS INDICATOR UPDATE
+    // =============================================
+    function updateStatus(text, active) {
+      if (statusText) statusText.textContent = text;
+      if (statusDot) {
+        if (active) {
+          statusDot.classList.add('active');
+        } else {
+          statusDot.classList.remove('active');
+        }
+      }
+    }
+
+    // =============================================
+    // 12. KEYBOARD SHORTCUTS (Optional)
+    // =============================================
     document.addEventListener('keydown', (e) => {
-      // Press 'V' to trigger voice input (for testing on desktop)
+      // Press 'V' to trigger voice input
       if (e.key === 'v' || e.key === 'V') {
         if (micBtn && !isListening) {
           micBtn.click();
@@ -720,11 +860,36 @@
 
       // Press 'S' to toggle streaming
       if (e.key === 's' || e.key === 'S') {
-        document.getElementById("toggleBtn").click();
+        toggleBtn.click();
+      }
+
+      // Press 'A' to analyze scene
+      if (e.key === 'a' || e.key === 'A') {
+        analyzeBtn.click();
+      }
+
+      // Press '1' for scan mode
+      if (e.key === '1') {
+        switchMode('scan');
+        speak('Scan mode');
+      }
+
+      // Press '2' for quickscan mode
+      if (e.key === '2') {
+        switchMode('quickscan');
+        speak('Quick scan mode');
+      }
+
+      // Press '3' for face recognition mode
+      if (e.key === '3') {
+        switchMode('face');
+        speak('Face recognition mode');
       }
     });
 
-    // ---------- 12. Prevent screen sleep on mobile (optional) ----------
+    // =============================================
+    // 13. WAKE LOCK (Prevent Screen Sleep)
+    // =============================================
     let wakeLock = null;
 
     async function requestWakeLock() {
@@ -743,22 +908,114 @@
     }
 
     // Request wake lock when streaming starts
-    const originalToggle = document.getElementById("toggleBtn").onclick;
-    document.getElementById("toggleBtn").onclick = () => {
-      originalToggle();
-
+    const originalStartStreaming = startStreaming;
+    startStreaming = function() {
+      originalStartStreaming();
       if (streaming) {
         requestWakeLock();
-      } else if (wakeLock) {
+      }
+    };
+
+    const originalStopStreaming = stopStreaming;
+    stopStreaming = function() {
+      originalStopStreaming();
+      if (wakeLock) {
         wakeLock.release();
         wakeLock = null;
       }
     };
 
+    // =============================================
+    // 14. PAGE VISIBILITY (Pause when hidden)
+    // =============================================
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        console.log('[PAGE] Hidden, pausing...');
+        if (streaming) {
+          stopStreaming();
+        }
+      } else {
+        console.log('[PAGE] Visible again');
+      }
+    });
 
+    // =============================================
+    // 15. CONNECTION CHECK
+    // =============================================
+    async function checkServerConnection() {
+      try {
+        const response = await fetch(`${backendURL}/health`);
+        const health = await response.json();
+        
+        console.log('[SERVER] Health check:', health);
+        
+        if (!health.yolo_model_loaded) {
+          output.innerHTML = '<strong>⚠ Warning:</strong> YOLO model not loaded. Object detection may not work.';
+        }
+        
+        if (!health.groq_configured) {
+          console.warn('[SERVER] Groq API not configured');
+        }
+
+        updateStatus("Connected", false);
+        return true;
+
+      } catch (err) {
+        console.error('[SERVER] Connection failed:', err);
+        updateStatus("Server Offline", false);
+        output.innerHTML = '<strong>Error:</strong> Cannot connect to server. Please check if the backend is running.';
+        return false;
+      }
+    }
+
+    // Check connection on load
+    setTimeout(checkServerConnection, 1000);
+
+    // =============================================
+    // 16. PERIODIC CONNECTION CHECK
+    // =============================================
+    setInterval(() => {
+      if (!streaming) {
+        checkServerConnection();
+      }
+    }, 30000); // Check every 30 seconds when not streaming
+
+    // =============================================
+    // 17. ERROR RECOVERY
+    // =============================================
+    window.addEventListener('error', (event) => {
+      console.error('[GLOBAL ERROR]', event.error);
+    });
+
+    // =============================================
+    // 18. INITIALIZATION MESSAGE
+    // =============================================
+    console.log(`
+    ╔═══════════════════════════════════════╗
+    ║   👓 NEYTRA INITIALIZED               ║
+    ║   Agentic AI Assistant                ║
+    ║                                       ║
+    ║   Modes Available:                    ║
+    ║   • Scan (10s interval)              ║
+    ║   • Quick Scan (2s interval)         ║
+    ║   • Face Recognition (5s interval)   ║
+    ║   • Vision LLM (on-demand)           ║
+    ║                                       ║
+    ║   Keyboard Shortcuts:                 ║
+    ║   V - Voice input                     ║
+    ║   S - Toggle streaming                ║
+    ║   A - Analyze scene                   ║
+    ║   1,2,3 - Switch modes                ║
+    ╚═══════════════════════════════════════╝
+    `);
+
+    // Welcome message
+    setTimeout(() => {
+      speak('Neytra initialized and ready');
+    }, 1500);
 
   </script>
+
 </body>
-
-
 </html>
+

@@ -6,46 +6,79 @@ from ultralytics import YOLO
 import face_recognition
 
 CONF_THRESHOLD = 0.5
-MODEL_PATH = '"D:\\Neytra\\models\\bestv4.pt"'  # load your best.pt here if available
+MODEL_PATH = "C:\\Users\\anujv\\OneDrive\\Desktop\\Programming\\Codes\\python\\Face Recognition\\Neytra\\Object\\Neytra-Obj_Detection\\models\\bestLatest.pt"  # ← FIXED: Removed extra quotes
 
+# Global model instance (loaded once, reused)
 yolo_model = None
-try:
-    if MODEL_PATH:
+
+def load_yolo_model():
+    """Load YOLO model once at startup"""
+    global yolo_model
+    if yolo_model is not None:
+        return yolo_model
+    
+    try:
+        print(f"[YOLO] Loading model from: {MODEL_PATH}")
         yolo_model = YOLO(MODEL_PATH)
-        print("YOLO model loaded successfully.")
-except:
-    yolo_model = None
+        print("[YOLO] ✅ Model loaded successfully")
+        return yolo_model
+    except Exception as e:
+        print(f"[YOLO] ❌ Failed to load model: {e}")
+        yolo_model = None
+        return None
 
 
-def detect_yolo(frame):
+def detect_yolo(frame, fast_mode=False):
+    """
+    YOLO object detection
+    
+    Args:
+        frame: Input image
+        fast_mode: If True, use lower resolution for faster detection (quickscan)
+    """
     detections = []
+    
     if yolo_model is None:
-        return detections
+        print("[YOLO] Model not loaded, attempting to load...")
+        load_yolo_model()
+        if yolo_model is None:
+            return detections
 
-    results = yolo_model(frame, imgsz=320, verbose=False)
-    r = results[0]
-    if not hasattr(r, "boxes") or r.boxes is None:
-        return detections
+    try:
+        # Adjust image size based on mode
+        imgsz = 320 if fast_mode else 640
+        
+        results = yolo_model(frame, imgsz=imgsz, verbose=False)
+        r = results[0]
+        
+        if not hasattr(r, "boxes") or r.boxes is None:
+            return detections
 
-    for box in r.boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        conf = float(box.conf[0])
-        cls = int(box.cls[0])
-        label = r.names[cls]
+        for box in r.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            conf = float(box.conf[0])
+            cls = int(box.cls[0])
+            label = r.names[cls]
 
-        if conf < CONF_THRESHOLD:
-            continue
+            if conf < CONF_THRESHOLD:
+                continue
 
-        detections.append({
-            "label": label,
-            "bbox": [x1, y1, x2, y2],
-            "confidence": conf
-        })
-
+            detections.append({
+                "label": label,
+                "bbox": [x1, y1, x2, y2],
+                "confidence": conf
+            })
+        
+        print(f"[YOLO] Detected {len(detections)} objects")
+        
+    except Exception as e:
+        print(f"[YOLO ERROR] {e}")
+    
     return detections
 
 
 def detect_faces_fallback(frame):
+    """Fallback face detection using face_recognition library"""
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     face_locs = face_recognition.face_locations(rgb)
     dets = []
