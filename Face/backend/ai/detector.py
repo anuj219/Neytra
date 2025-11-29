@@ -6,7 +6,7 @@ from ultralytics import YOLO
 import face_recognition
 
 CONF_THRESHOLD = 0.5
-MODEL_PATH = "C:\\Users\\anujv\\OneDrive\\Desktop\\Programming\\Codes\\python\\Face Recognition\\Neytra\\Object\\Neytra-Obj_Detection\\models\\bestLatest.pt"  # ← FIXED: Removed extra quotes
+MODEL_PATH ="D:\\Neytra\\models\\bestv4.pt"  # ← FIXED: Removed extra quotes
 
 # Global model instance (loaded once, reused)
 yolo_model = None

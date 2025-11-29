@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,7 +42,7 @@
       padding: 15px;
       margin-bottom: 15px;
       text-align: center;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     }
 
     .mode-display h2 {
@@ -63,7 +63,7 @@
       border-radius: 15px;
       overflow: hidden;
       margin-bottom: 15px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
     }
 
     #cam {
@@ -108,7 +108,7 @@
       padding: 15px;
       margin-bottom: 15px;
       min-height: 100px;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
     }
 
     #output strong {
@@ -133,7 +133,7 @@
       transition: all 0.3s ease;
       background: white;
       color: #667eea;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
     }
 
     .controls button:active {
@@ -151,7 +151,7 @@
       border-radius: 15px;
       padding: 20px;
       text-align: center;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
     }
 
     .voice-trigger-label {
@@ -211,8 +211,15 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
     }
 
     /* Responsive */
@@ -220,13 +227,14 @@
       .header h1 {
         font-size: 2em;
       }
-      
+
       .controls {
         grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
+
 <body>
 
   <div class="header">
@@ -266,7 +274,8 @@
     <button id="micBtn" aria-label="Voice Input">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
         <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+        <path
+          d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
       </svg>
     </button>
     <div class="voice-feedback" id="voiceFeedback"></div>
@@ -276,7 +285,7 @@
     // =============================================
     // CONFIGURATION
     // =============================================
-    const backendURL = "http://192.168.134.214:8000";
+    const backendURL = "http://192.168.134.28:8000";
 
     // =============================================
     // STATE MANAGEMENT
@@ -443,19 +452,25 @@
         const pos = getPosition(det.bbox);
         const priority = det.priority ? '⚠ ' : '';
         const confidence = det.confidence ? `${(det.confidence * 100).toFixed(0)}%` : '';
-        
+
         text += `${priority}📦 ${det.label} ${pos} ${confidence}<br>`;
-        
+
         if (det.priority || currentMode === 'quickscan') {
-          phrases.push( `${det.label} ${pos}`);
+          phrases.push(`${det.label} ${pos}`);
         }
       });
 
-      output.innerHTML = text;
-
-      if (phrases.length > 0) {
-        const sentence = phrases.join(", ");
-        speak(sentence);
+      // Navigation Guidance Override
+      if (data.navigation) {
+        text = `<strong>🧭 Navigation:</strong> ${data.navigation}<br><hr>` + text;
+        output.innerHTML = text;
+        speak(data.navigation);
+      } else {
+        output.innerHTML = text;
+        if (phrases.length > 0) {
+          const sentence = phrases.join(", ");
+          speak(sentence);
+        }
       }
     }
 
@@ -467,7 +482,7 @@
         data.faces.forEach((face) => {
           const icon = face.name === 'unknown' ? '❓' : '👤';
           text += `${icon} ${face.name}<br>`;
-          
+
           if (face.announce && face.name !== 'unknown') {
             phrases.push(face.name);
           }
@@ -538,7 +553,7 @@
       if (streaming) return;
 
       const config = MODE_CONFIG[currentMode];
-      
+
       if (!config.interval) {
         // One-shot mode (vision)
         captureAndSendFrame();
@@ -716,7 +731,7 @@
     async function processVoiceCommand(command) {
       try {
         console.log('[VOICE] Processing command:', command);
-        
+
         // Show processing state
         voiceFeedback.innerHTML = '<span class="loading"></span> Processing...';
 
@@ -746,7 +761,7 @@
         console.error('[VOICE] Processing error:', err);
         voiceFeedback.textContent = 'Failed to process command';
         speak('Sorry, I could not process that command');
-        
+
         setTimeout(() => {
           voiceFeedback.textContent = '';
         }, 2000);
@@ -804,7 +819,7 @@
 
             const formData = new FormData();
             formData.append("file", blob, "frame.jpg");
-            
+
             // Add the prompt from LLM
             if (prompt) {
               formData.append("prompt", prompt);
@@ -816,7 +831,7 @@
             });
 
             const result = await response.json();
-            
+
             output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.description};
             speak(result.description)`;
 
@@ -909,7 +924,7 @@
 
     // Request wake lock when streaming starts
     const originalStartStreaming = startStreaming;
-    startStreaming = function() {
+    startStreaming = function () {
       originalStartStreaming();
       if (streaming) {
         requestWakeLock();
@@ -917,7 +932,7 @@
     };
 
     const originalStopStreaming = stopStreaming;
-    stopStreaming = function() {
+    stopStreaming = function () {
       originalStopStreaming();
       if (wakeLock) {
         wakeLock.release();
@@ -946,13 +961,13 @@
       try {
         const response = await fetch(`${backendURL}/health`);
         const health = await response.json();
-        
+
         console.log('[SERVER] Health check:', health);
-        
+
         if (!health.yolo_model_loaded) {
           output.innerHTML = '<strong>⚠ Warning:</strong> YOLO model not loaded. Object detection may not work.';
         }
-        
+
         if (!health.groq_configured) {
           console.warn('[SERVER] Groq API not configured');
         }
@@ -1017,5 +1032,5 @@
   </script>
 
 </body>
-</html>
 
+</html>

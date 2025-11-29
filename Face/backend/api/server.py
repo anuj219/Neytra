@@ -67,10 +67,10 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Any, Optional
-from ai.pipeline import process_frame
+from ai.pipeline import process_frame, process_frame_scan, process_frame_quickscan, process_frame_face
 from PIL import Image
 import numpy as np
 import cv2
@@ -80,6 +80,7 @@ import json
 from groq import Groq
 from dotenv import load_dotenv
 from ai.llm import generate_scene_description
+from ai.navigation import get_navigation_guidance
 
 app = FastAPI()
 
@@ -366,11 +367,19 @@ async def scan_endpoint(file: UploadFile = File(...)):
         # Process with scan mode
         results = process_frame_scan(frame)
 
+        # Get navigation guidance
+        guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
+        if guidance:
+            print(f"[NAVIGATION] Guidance: {guidance}")
+        else:
+            print("[NAVIGATION] Path clear")
+
         return JSONResponse({
             "mode": "scan",
             "status": "success",
             "detections": results,
-            "count": len(results)
+            "count": len(results),
+            "navigation": guidance
         })
     
     except Exception as e:
@@ -395,12 +404,16 @@ async def quickscan_endpoint(file: UploadFile = File(...)):
         # Process with quickscan mode
         results = process_frame_quickscan(frame)
 
+        # Get navigation guidance
+        guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
+
         return JSONResponse({
             "mode": "quickscan",
             "status": "success",
             "detections": results,
             "count": len(results),
-            "priority": "high"
+            "priority": "high",
+            "navigation": guidance
         })
     
     except Exception as e:
@@ -537,6 +550,10 @@ async def process_voice_command(voice_input: VoiceCommand):
     return ModeResponse(**mode_data)
 
 
+# ========================
+# HEALTH & STATIC FILES
+# ========================
+
 @app.get("/")
 def root():
     """Serve mobile client interface"""
@@ -545,28 +562,18 @@ def root():
         return FileResponse(index_path)
     return {"status": "running", "message": "Neytra Server Running"}
 
-
-@app.get("/index.html")
-def serve_index():
-    """Serve the mobile client index.html"""
-    index_path = os.path.join(MOBILE_CLIENT_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"error": "index.html not found"}
-
-
 @app.get("/health")
 def health_check():
     """Check if server is running"""
+    from ai.detector import yolo_model
+    
     return {
         "status": "healthy",
         "llm_provider": "Groq (Llama 3.3)",
+        "yolo_model_loaded": yolo_model is not None,
         "mobile_client": os.path.exists(MOBILE_CLIENT_DIR),
-        "groq_configured": bool(
-            GROQ_API_KEY and GROQ_API_KEY != "your-groq-api-key-here"
-        ),
+        "groq_configured": bool(GROQ_API_KEY and GROQ_API_KEY != "your-groq-api-key-here"),
     }
-
 
 # Mount static files
 if os.path.exists(MOBILE_CLIENT_DIR):
