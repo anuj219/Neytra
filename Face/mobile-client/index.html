@@ -570,15 +570,14 @@
         enrollmentState.pendingEnrollmentPrompted = true;
         updateEnrollmentUI();
 
-        const promptText = unknownFaceWithEncoding.prompt_enrollment
-          ? 'This unknown person has been seen for 10 seconds. Say yes to enroll, or no to skip.'
-          : `Unknown person detected for ${unknownFaceWithEncoding.unknown_seen_seconds} seconds. Keep them in frame for 10 seconds to enroll.`;
-
-        speak(promptText);
-        voiceFeedback.textContent = promptText;
-
         if (unknownFaceWithEncoding.prompt_enrollment) {
-          voiceFeedback.textContent += ' Press the microphone or say yes/no.';
+          speak('Unknown person seen enough times. Starting enrollment now. Please say the person’s name.');
+          voiceFeedback.textContent = 'Enrollment started. Say the person’s name.';
+          beginEnrollment();
+        } else {
+          const promptText = `Unknown person detected ${unknownFaceWithEncoding.detection_count} times. Keep them in frame for 3 detections within 15 seconds to enroll.`;
+          speak(promptText);
+          voiceFeedback.textContent = promptText;
         }
       } else if (unknownFaceFound && !unknownFaceWithEncoding) {
         console.log('[ENROLLMENT] Unknown face found but no encoding - cannot enroll');
