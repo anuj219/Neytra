@@ -5,6 +5,7 @@ import face_recognition
 from ai.detector import detect_yolo, detect_faces_fallback, load_yolo_model
 from ai.recognizer import load_database, compare_face_to_db
 from ai.encounter import update_presence, mark_absent
+from ai.state_manager import state_manager
 
 FACE_MATCH_THRESHOLD = 0.6
 PERSON_LABELS = {"person", "face", "human"}

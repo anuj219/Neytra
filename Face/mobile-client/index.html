@@ -285,7 +285,7 @@
     // =============================================
     // CONFIGURATION
     // =============================================
-    const backendURL = "http://192.168.134.214:8000";
+    const backendURL = "http://192.168.134.28:8000";
 
     // =============================================
     // STATE MANAGEMENT
@@ -530,23 +530,27 @@
     }
 
     // =============================================
-    // 5. MODE SWITCHING
+    // 5. MODE SWITCHING & STREAMING LOOP
     // =============================================
     function switchMode(newMode) {
-      // Stop current streaming
-      if (streaming) {
-        stopStreaming();
-      }
-
-      // Update mode
+      if (streaming) stopStreaming();
       currentMode = newMode;
       const config = MODE_CONFIG[newMode];
-
-      // Update UI
       currentModeDisplay.textContent = config.name;
       modeDescription.textContent = config.description;
-
       console.log(`[MODE] Switched to ${newMode}`);
+    }
+
+    async function streamLoop() {
+      if (!streaming) return;
+
+      await captureAndSendFrame();
+
+      if (streaming) {
+        // Small delay for face mode to avoid overloading
+        const delay = currentMode === 'face' ? 100 : 0;
+        setTimeout(streamLoop, delay);
+      }
     }
 
     function startStreaming() {
@@ -554,8 +558,7 @@
 
       const config = MODE_CONFIG[currentMode];
 
-      if (!config.interval) {
-        // One-shot mode (vision)
+      if (config.interval === null) {
         captureAndSendFrame();
         return;
       }
@@ -563,28 +566,18 @@
       streaming = true;
       toggleBtn.textContent = `Stop ${config.name}`;
       toggleBtn.classList.add('active');
-      updateStatus(`${config.name} Active, true`);
+      updateStatus(`${config.name} Active`, true);
+      console.log(`[STREAMING] Started in ${currentMode} mode (Continuous)`);
 
-      // Immediate first frame
-      captureAndSendFrame();
-
-      // Then periodic updates
-      intervalId = setInterval(captureAndSendFrame, config.interval);
-
-      console.log(`[STREAMING] Started in ${currentMode} mode (${config.interval}ms interval)`);
+      streamLoop();
     }
 
     function stopStreaming() {
       if (!streaming) return;
-
       streaming = false;
-      clearInterval(intervalId);
-      intervalId = null;
-
       toggleBtn.textContent = 'Start Scan Mode';
       toggleBtn.classList.remove('active');
       updateStatus("Paused", false);
-
       console.log('[STREAMING] Stopped');
     }
 
@@ -600,12 +593,8 @@
     };
 
     analyzeBtn.onclick = async () => {
-      // Stop current streaming
-      if (streaming) {
-        stopStreaming();
-      }
+      if (streaming) stopStreaming();
 
-      // Switch to vision mode temporarily
       const previousMode = currentMode;
       currentMode = 'vision';
 
@@ -615,7 +604,6 @@
 
       await captureAndSendFrame();
 
-      // Return to previous mode
       currentMode = previousMode;
       updateStatus("Ready", false);
     };

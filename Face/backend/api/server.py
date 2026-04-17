@@ -81,10 +81,11 @@ from groq import Groq
 from dotenv import load_dotenv
 from ai.llm import generate_scene_description
 from ai.navigation import get_navigation_guidance
-from ai.detector import yolo_model
+from ai.detector import load_yolo_model
+from ai.state_manager import state_manager
 
 app = FastAPI()
-yolo_model()
+load_yolo_model()
 # ============ PATH SETUP ============
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FACE_DIR = os.path.dirname(BACKEND_DIR)
@@ -370,6 +371,8 @@ async def scan_endpoint(file: UploadFile = File(...)):
 
         # Get navigation guidance
         guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
+        
+            
         if guidance:
             print(f"[NAVIGATION] Guidance: {guidance}")
         else:
@@ -407,6 +410,10 @@ async def quickscan_endpoint(file: UploadFile = File(...)):
 
         # Get navigation guidance
         guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
+        
+        # Filter guidance using state manager
+        if not state_manager.should_announce_navigation(guidance):
+            guidance = None
 
         return JSONResponse({
             "mode": "quickscan",
