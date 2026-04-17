@@ -70,13 +70,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Any, Optional
-from ai.pipeline import process_frame, process_frame_scan, process_frame_quickscan, process_frame_face
+from ai.pipeline import process_frame, process_frame_scan, process_frame_quickscan, process_frame_face, reload_database
+from ai.enrollment import (
+    initiate_enrollment, ask_for_name, confirm_name, 
+    complete_enrollment, cancel_enrollment, save_unknown_face,
+    encode_face_for_transmission, decode_face_from_transmission
+)
 from PIL import Image
 import numpy as np
 import cv2
 import io
 import os
 import json
+import base64
 from groq import Groq
 from dotenv import load_dotenv
 from ai.llm import generate_scene_description
@@ -84,7 +90,7 @@ from ai.navigation import get_navigation_guidance
 from ai.detector import yolo_model
 
 app = FastAPI()
-yolo_model()
+# Note: YOLO model is loaded automatically when pipeline.py is imported (load_yolo_model() at module level)
 # ============ PATH SETUP ============
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FACE_DIR = os.path.dirname(BACKEND_DIR)
@@ -124,6 +130,18 @@ class ModeResponse(BaseModel):
     mode: str
     prompt: Optional[str] = None
     endpoint: Optional[str] = None
+
+
+class EnrollmentRequest(BaseModel):
+    face_encoding: str  # base64 encoded numpy array
+    name: str
+
+
+class EnrollmentResponse(BaseModel):
+    status: str
+    message: str
+    name: Optional[str] = None
+    action: Optional[str] = None
 
 # ========================
 # MODE → ENDPOINT MAPPING
@@ -456,6 +474,151 @@ async def face_recognition_endpoint(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/enroll/initiate", response_model=EnrollmentResponse)
+async def enroll_initiate_endpoint(file: UploadFile = File(...)):
+    """
+    ENROLLMENT STEP 1: Detect unknown person and initiate enrollment
+    Returns face encoding and asks for confirmation
+    """
+    try:
+        print("\n[API] /api/enroll/initiate - Starting enrollment")
+        
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame_rgb = np.array(img)
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        # Process frame for face detection
+        results = process_frame_face(frame)
+        
+        # Find unknown faces
+        unknown_faces = [r for r in results if r["type"] == "face" and r["name"] == "unknown"]
+        
+        if not unknown_faces:
+            return EnrollmentResponse(
+                status="no_unknown_faces",
+                message="No unknown faces detected",
+                action=None
+            )
+        
+        # For now, take the first unknown face
+        # (could be extended to handle multiple)
+        print("[ENROLL] Unknown person detected - requesting enrollment confirmation")
+        
+        return EnrollmentResponse(
+            status="initiated",
+            message="Unknown person detected. Do you want to add them? Say yes or no.",
+            action="ask_confirmation"
+        )
+    
+    except Exception as e:
+        print(f"[ENROLL ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/enroll/capture-face")
+async def enroll_capture_face_endpoint(file: UploadFile = File(...)):
+    """
+    ENROLLMENT STEP 2: Extract and store face encoding from image
+    Called when user confirms they want to enroll
+    """
+    try:
+        print("\n[API] /api/enroll/capture-face - Capturing face encoding")
+        
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame_rgb = np.array(img)
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+
+        # Detect faces and get encodings
+        import face_recognition
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_locs = face_recognition.face_locations(rgb_frame)
+        face_encs = face_recognition.face_encodings(rgb_frame, face_locs)
+        
+        if not face_encs:
+            return JSONResponse({
+                "status": "error",
+                "message": "No face found in image",
+                "action": "retry_capture"
+            }, status_code=400)
+        
+        # Use first detected face
+        face_encoding = face_encs[0]
+        
+        # Initiate enrollment process with this encoding
+        result = initiate_enrollment(face_encoding)
+        
+        # Encode for transmission
+        encoded = encode_face_for_transmission(face_encoding)
+        
+        return JSONResponse({
+            "status": "captured",
+            "message": "Face captured. Please provide name.",
+            "encoded_face": encoded,
+            "action": "capture_name"
+        })
+    
+    except Exception as e:
+        print(f"[ENROLL CAPTURE ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/enroll/save")
+async def enroll_save_endpoint(enrollment_request: EnrollmentRequest):
+    """
+    ENROLLMENT STEP 3: Save the enrolled face with confirmed name
+    """
+    try:
+        print(f"\n[API] /api/enroll/save - Saving face for: {enrollment_request.name}")
+        
+        # Decode the face encoding
+        face_encoding = decode_face_from_transmission(enrollment_request.face_encoding)
+        
+        # Save using the enrollment module
+        result = save_unknown_face(face_encoding, enrollment_request.name)
+        
+        if result["status"] == "success":
+            print(f"[ENROLL] Successfully enrolled: {enrollment_request.name}")
+            # Reload the in-memory face database so new face is recognized immediately
+            reload_database()
+            return EnrollmentResponse(
+                status="success",
+                message=result["message"],
+                name=enrollment_request.name,
+                action="enrollment_complete"
+            )
+        else:
+            return EnrollmentResponse(
+                status="error",
+                message=result["message"],
+                action="retry"
+            )
+    
+    except Exception as e:
+        print(f"[ENROLL SAVE ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/enroll/cancel")
+async def enroll_cancel_endpoint():
+    """
+    ENROLLMENT CANCEL: Cancel ongoing enrollment
+    """
+    try:
+        print("\n[API] /api/enroll/cancel - Cancelling enrollment")
+        cancel_enrollment()
+        
+        return EnrollmentResponse(
+            status="cancelled",
+            message="Enrollment cancelled."
+        )
+    
+    except Exception as e:
+        print(f"[ENROLL CANCEL ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # @app.post("/api/vision")
 # async def vision_llm_endpoint(
 #     file: UploadFile = File(...),
@@ -526,29 +689,6 @@ async def receive_frame(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/voice-command", response_model=ModeResponse)
-async def process_voice_command(voice_input: VoiceCommand):
-    """
-    Process voice command and determine intent using Groq LLM.
-
-    Returns:
-        - intent: What the user wants (e.g., "object_detection")
-        - mode: Which system mode to activate
-        - response: Natural language response to speak back
-        - action: Specific action to trigger (optional)
-    """
-    command = voice_input.command
-
-    print(f"\n[VOICE] Received: '{command}'")
-
-    # Use Groq for intent detection
-    mode_data = detect_mode_groq(command)
-
-    print(f"[MODE] → {mode_data['mode']}")
-    if "prompt" in mode_data:
-        print(f"[PROMPT] → {mode_data['prompt']}")
-    print(f"{'='*60}\n")
-    return ModeResponse(**mode_data)
 
 
 # ========================

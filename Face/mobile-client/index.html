@@ -281,11 +281,19 @@
     <div class="voice-feedback" id="voiceFeedback"></div>
   </div>
 
+  <!-- Enrollment Controls (appear during enrollment confirmation) -->
+  <div id="enrollmentControls" style="display:none; margin-top:12px; text-align:center;">
+    <div id="enrollmentText" style="color:white; margin-bottom:8px;"></div>
+    <button id="enrollConfirmBtn" style="margin-right:8px;">Confirm</button>
+    <button id="enrollRetryBtn" style="margin-right:8px;">Retry Name</button>
+    <button id="enrollCancelBtn">Cancel</button>
+  </div>
+
   <script>
     // =============================================
     // CONFIGURATION
     // =============================================
-    const backendURL = "http://192.168.134.214:8000";
+    const backendURL = "http://192.168.56.214:8000";
 
     // =============================================
     // STATE MANAGEMENT
@@ -294,8 +302,31 @@
     let intervalId = null;
     let isListening = false;
     let recognition = null;
-    let currentMode = 'scan'; // scan, quickscan, face, vision
+    let currentMode = 'face'; // scan, quickscan, face, vision
     let isProcessing = false;
+    
+    // Enrollment state 
+    let enrollmentState = {
+      active: false,
+      pendingFaceEncoding: null,
+      pendingName: null,
+      pendingEnrollmentPrompted: false,
+      // remember streaming state so we can resume after enrollment
+      wasStreaming: false
+    };
+
+    // Helper: common affirmative/negative phrases
+    function isAffirmative(text) {
+      if (!text) return false;
+      const t = text.toLowerCase();
+      return ["yes", "yeah", "yep", "yup", "sure", "ok", "okay", "confirm", "correct", "add"].some(w => t.includes(w));
+    }
+
+    function isNegative(text) {
+      if (!text) return false;
+      const t = text.toLowerCase();
+      return ["no", "nah", "nope", "skip", "cancel", "don't", "dont"].some(w => t.includes(w));
+    }
 
     // =============================================
     // DOM ELEMENTS
@@ -329,9 +360,9 @@
       },
       face: {
         endpoint: '/api/face',
-        interval: 5000, // 5 seconds
+        interval: 3000, // 3 seconds for faster response
         name: 'FACE RECOGNITION MODE',
-        description: 'Identifying people around you'
+        description: 'Identifying people and objects using YOLO'
       },
       vision: {
         endpoint: '/api/vision',
@@ -347,7 +378,7 @@
     async function startCamera() {
       try {
         const constraints = {
-          video: { facingMode: { ideal: "environment" } }, // Back camera
+          video: { facingMode: { ideal: "user" } }, // Back camera, user: front
           audio: false,
         };
 
@@ -396,7 +427,7 @@
         });
 
         const data = await res.json();
-        console.log(`[${currentMode.toUpperCase()}] Response:, data`);
+        console.log(`[${currentMode.toUpperCase()}] Response:`, data);
 
         handleModeResponse(data);
 
@@ -448,17 +479,33 @@
       let text = `<strong>Detected (${data.mode}):</strong><br>`;
       const phrases = [];
 
+      let personDetected = false;
       data.detections.forEach((det) => {
+        const labelLower = det.label.toLowerCase();
         const pos = getPosition(det.bbox);
         const priority = det.priority ? '⚠ ' : '';
         const confidence = det.confidence ? `${(det.confidence * 100).toFixed(0)}%` : '';
 
         text += `${priority}📦 ${det.label} ${pos} ${confidence}<br>`;
 
+        if (det.label && ['person', 'face', 'human'].includes(labelLower)) {
+          personDetected = true;
+        }
+
         if (det.priority || currentMode === 'quickscan') {
           phrases.push(`${det.label} ${pos}`);
         }
       });
+
+      if (personDetected && currentMode !== 'face') {
+        speak('Face detected. Switching to face recognition.');
+        switchMode('face');
+        if (streaming) {
+          stopStreaming();
+          startStreaming();
+        }
+        return;
+      }
 
       // Navigation Guidance Override
       if (data.navigation) {
@@ -477,6 +524,10 @@
     function handleFaceRecognition(data) {
       let text = "<strong>Face Recognition:</strong><br>";
       const phrases = [];
+      let unknownFaceFound = false;
+      let unknownFaceWithEncoding = null;
+
+      console.log('[FACE RECOGNITION] Processing response:', data);
 
       if (data.faces && data.faces.length > 0) {
         data.faces.forEach((face) => {
@@ -485,6 +536,13 @@
 
           if (face.announce && face.name !== 'unknown') {
             phrases.push(face.name);
+          }
+          
+          // Check if unknown face has encoding (eligible for enrollment)
+          if (face.name === 'unknown' && face.face_encoding) {
+            unknownFaceFound = true;
+            unknownFaceWithEncoding = face;
+            console.log('[FACE RECOGNITION] Found unknown face with encoding for enrollment');
           }
         });
       }
@@ -503,6 +561,27 @@
 
       if (phrases.length > 0) {
         speak(phrases.join(", ") + " detected");
+      }
+      
+      // Handle unknown face enrollment prompt
+      if (unknownFaceFound && unknownFaceWithEncoding && !enrollmentState.active) {
+        console.log('[ENROLLMENT] Triggering enrollment prompt for unknown face');
+        enrollmentState.pendingFaceEncoding = unknownFaceWithEncoding.face_encoding;
+        enrollmentState.pendingEnrollmentPrompted = true;
+        updateEnrollmentUI();
+
+        const promptText = unknownFaceWithEncoding.prompt_enrollment
+          ? 'This unknown person has been seen for 10 seconds. Say yes to enroll, or no to skip.'
+          : `Unknown person detected for ${unknownFaceWithEncoding.unknown_seen_seconds} seconds. Keep them in frame for 10 seconds to enroll.`;
+
+        speak(promptText);
+        voiceFeedback.textContent = promptText;
+
+        if (unknownFaceWithEncoding.prompt_enrollment) {
+          voiceFeedback.textContent += ' Press the microphone or say yes/no.';
+        }
+      } else if (unknownFaceFound && !unknownFaceWithEncoding) {
+        console.log('[ENROLLMENT] Unknown face found but no encoding - cannot enroll');
       }
     }
 
@@ -639,17 +718,37 @@
         };
 
         recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          console.log(`[VOICE] Recognized: "${transcript}"`);
-          voiceFeedback.textContent = `You said: "${transcript}"`;
+          (async () => {
+            const transcript = event.results[0][0].transcript;
+            console.log(`[VOICE] Recognized: "${transcript}"`);
+            voiceFeedback.textContent = `You said: "${transcript}"`;
 
-          // Send to backend for intent detection
-          processVoiceCommand(transcript);
+            // Quick path: if we're in enrollment confirmation and user said affirmative, trigger save immediately
+            try {
+                if (enrollmentState.active && enrollmentState.pendingName && isAffirmative(transcript)) {
+                  console.log('[VOICE] Quick affirmative detected in onresult — completing enrollment');
+                  // Ensure streaming is stopped before saving
+                  if (streaming) {
+                    console.log('[VOICE] Stopping streaming before enrollment save (quick path)');
+                    stopStreaming();
+                    enrollmentState.wasStreaming = true;
+                  }
+                  // call without awaiting to avoid blocking recognition lifecycle
+                  completeEnrollment();
+                  return;
+                }
+            } catch (e) {
+              console.warn('[VOICE] Quick path check failed', e);
+            }
 
-          // Auto-clear feedback after 3 seconds
-          setTimeout(() => {
-            if (voiceFeedback) voiceFeedback.textContent = '';
-          }, 3000);
+            // Send to backend for intent detection / or enrollment flow
+            await processVoiceCommand(transcript);
+
+            // Auto-clear feedback after 3 seconds
+            setTimeout(() => {
+              if (voiceFeedback) voiceFeedback.textContent = '';
+            }, 3000);
+          })();
         };
 
         recognition.onerror = (event) => {
@@ -731,11 +830,85 @@
     async function processVoiceCommand(command) {
       try {
         console.log('[VOICE] Processing command:', command);
+        console.log('[VOICE] enrollmentState:', JSON.stringify({active: enrollmentState.active, pendingFaceEncoding: !!enrollmentState.pendingFaceEncoding, pendingName: enrollmentState.pendingName, prompted: enrollmentState.pendingEnrollmentPrompted}));
 
         // Show processing state
         voiceFeedback.innerHTML = '<span class="loading"></span> Processing...';
 
-        // Step 1: Send command to backend for intent detection
+        // ===== ENROLLMENT FLOW =====
+        // If there's a pending unknown face and we have not yet asked to add
+        if (enrollmentState.pendingFaceEncoding && !enrollmentState.active && !enrollmentState.pendingName) {
+          if (isAffirmative(command)) {
+            // User agreed to enroll — pause streaming so we don't get repeated detections
+            enrollmentState.wasStreaming = streaming;
+            if (streaming) stopStreaming();
+
+            enrollmentState.active = true;
+            enrollmentState.pendingEnrollmentPrompted = false;
+            speak("Okay, please say the person's name");
+            voiceFeedback.textContent = 'Ready for name input...';
+            updateEnrollmentUI();
+            return;
+          } else if (isNegative(command)) {
+            speak("Enrollment cancelled");
+            enrollmentState.pendingFaceEncoding = null;
+            enrollmentState.pendingEnrollmentPrompted = false;
+            enrollmentState.active = false;
+            voiceFeedback.textContent = '';
+            updateEnrollmentUI();
+            return;
+          }
+        }
+
+        // If we're waiting for name input during enrollment (user already said yes)
+        if (enrollmentState.active && enrollmentState.pendingFaceEncoding && !enrollmentState.pendingName) {
+          // Treat the spoken command as the name
+          enrollmentState.pendingName = command.trim();
+          updateEnrollmentUI();
+          speak(`You said ${enrollmentState.pendingName}. Is this correct? Say yes to confirm or no to try again.`);
+          console.log('[ENROLLMENT] Captured name:', enrollmentState.pendingName);
+          return;
+        }
+
+        // If we're confirming the name
+        if (enrollmentState.active && enrollmentState.pendingFaceEncoding && enrollmentState.pendingName) {
+            if (isAffirmative(command)) {
+              // Ensure streaming is stopped before saving
+              if (streaming) {
+                console.log('[VOICE] Stopping streaming before enrollment save (confirmation branch)');
+                stopStreaming();
+                enrollmentState.wasStreaming = true;
+              }
+              // Complete enrollment
+              await completeEnrollment();
+              return;
+            } else if (isNegative(command)) {
+              // Let user try again without resuming streaming (they are in the enrollment flow)
+              speak("Okay, let's try again. Say the person's name.");
+              enrollmentState.pendingName = null;
+              voiceFeedback.textContent = 'Ready for name input...';
+              return;
+            }
+        }
+
+        // If user explicitly cancels the enrollment flow while active
+        if (enrollmentState.active && isNegative(command) && /cancel|stop|abort/.test(command.toLowerCase())) {
+          const shouldResumeCancel = enrollmentState.wasStreaming;
+          enrollmentState.pendingFaceEncoding = null;
+          enrollmentState.pendingName = null;
+          enrollmentState.active = false;
+          enrollmentState.wasStreaming = false;
+          speak('Enrollment cancelled');
+          voiceFeedback.textContent = '';
+          if (shouldResumeCancel) {
+            setTimeout(() => startStreaming(), 300);
+          }
+          return;
+        }
+
+        // ===== END ENROLLMENT FLOW =====
+
+        // Send command to backend for intent detection
         const response = await fetch(`${backendURL}/voice-command`, {
           method: 'POST',
           headers: {
@@ -767,10 +940,171 @@
         }, 2000);
       }
     }
+    
+    // =============================================
+    // ENROLLMENT COMPLETION HANDLER
+    // =============================================
+    async function completeEnrollment() {
+      try {
+        const name = enrollmentState.pendingName;
+        const encoding = enrollmentState.pendingFaceEncoding;
+        
+        console.log('[ENROLLMENT] Completing enrollment for:', name, 'encoding present?', !!encoding);
+        updateEnrollmentUI();
+        
+        speak(`Adding ${name} to memory. Please wait...`);
+        voiceFeedback.innerHTML = '<span class="loading"></span> Saving face...';
+        
+        // Call backend to save the face
+        const response = await fetch(`${backendURL}/api/enroll/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: name,
+            face_encoding: encoding
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          speak(`${name} has been added to memory successfully`);
+          console.log('[ENROLLMENT] Success:', result);
+        } else {
+          speak(`Failed to save ${name}. Error: ${result.message}`);
+          console.error('[ENROLLMENT] Failed:', result);
+        }
+        
+        // Reset enrollment state and resume streaming if we paused it
+        const shouldResume = enrollmentState.wasStreaming;
+        enrollmentState.pendingFaceEncoding = null;
+        enrollmentState.pendingName = null;
+        enrollmentState.active = false;
+        enrollmentState.wasStreaming = false;
+        voiceFeedback.textContent = '';
+
+        if (shouldResume) {
+          // small delay to let TTS finish speaking the success message
+          setTimeout(() => {
+            startStreaming();
+          }, 500);
+        }
+        
+        } catch (err) {
+        console.error('[ENROLLMENT] Error:', err);
+        speak('Failed to save the face. Please try again.');
+        voiceFeedback.textContent = 'Enrollment failed';
+
+        // Reset on error and resume streaming if needed
+        const shouldResumeOnError = enrollmentState.wasStreaming;
+        enrollmentState.pendingFaceEncoding = null;
+        enrollmentState.pendingName = null;
+        enrollmentState.active = false;
+        enrollmentState.wasStreaming = false;
+
+        if (shouldResumeOnError) {
+          setTimeout(() => {
+            startStreaming();
+          }, 500);
+        }
+
+        setTimeout(() => {
+          voiceFeedback.textContent = '';
+        }, 2000);
+      }
+    }
 
     // =============================================
     // 10. HANDLE VOICE-DETECTED MODE
     // =============================================
+
+    // =============================================
+    // ENROLLMENT UI HELPERS
+    // =============================================
+    const enrollmentControls = document.getElementById('enrollmentControls');
+    const enrollmentText = document.getElementById('enrollmentText');
+    const enrollConfirmBtn = document.getElementById('enrollConfirmBtn');
+    const enrollRetryBtn = document.getElementById('enrollRetryBtn');
+    const enrollCancelBtn = document.getElementById('enrollCancelBtn');
+
+    function updateEnrollmentUI() {
+      try {
+        if (enrollmentState.active && enrollmentState.pendingName) {
+          enrollmentControls.style.display = 'block';
+          enrollConfirmBtn.textContent = 'Save Name';
+          enrollmentText.textContent = `Add "${enrollmentState.pendingName}" to memory?`;
+        } else if (enrollmentState.active && enrollmentState.pendingFaceEncoding && !enrollmentState.pendingName) {
+          enrollmentControls.style.display = 'block';
+          enrollConfirmBtn.textContent = 'Capture Name';
+          enrollmentText.textContent = 'Waiting for name... Press the microphone and speak the person’s name.';
+        } else if (enrollmentState.pendingFaceEncoding && !enrollmentState.active) {
+          enrollmentControls.style.display = 'block';
+          enrollConfirmBtn.textContent = 'Start Enrollment';
+          enrollmentText.textContent = 'Unknown person detected. Say yes or press Start Enrollment to enroll.';
+        } else {
+          enrollmentControls.style.display = 'none';
+          enrollmentText.textContent = '';
+        }
+      } catch (e) {
+        console.warn('Failed to update enrollment UI', e);
+      }
+    }
+
+    function beginEnrollment() {
+      if (!enrollmentState.pendingFaceEncoding) {
+        speak('No unknown face is waiting to be enrolled.');
+        return;
+      }
+      enrollmentState.wasStreaming = streaming;
+      if (streaming) stopStreaming();
+      enrollmentState.active = true;
+      enrollmentState.pendingEnrollmentPrompted = false;
+      enrollmentState.pendingName = null;
+      updateEnrollmentUI();
+      speak("Please say the person's name now.");
+      voiceFeedback.textContent = 'Ready for name input...';
+    }
+
+    enrollConfirmBtn.addEventListener('click', () => {
+      console.log('[ENROLLMENT UI] Confirm button clicked');
+      if (!enrollmentState.active && enrollmentState.pendingFaceEncoding) {
+        beginEnrollment();
+      } else if (enrollmentState.active && enrollmentState.pendingName) {
+        completeEnrollment();
+      } else {
+        speak('Press the microphone and say the name when ready.');
+      }
+    });
+
+    enrollRetryBtn.addEventListener('click', () => {
+      console.log('[ENROLLMENT UI] Retry name clicked');
+      if (enrollmentState.active) {
+        enrollmentState.pendingName = null;
+        speak("Okay, please say the person's name");
+        voiceFeedback.textContent = 'Ready for name input...';
+      } else {
+        speak('Enrollment has not started yet. Press Start Enrollment first.');
+      }
+      updateEnrollmentUI();
+    });
+
+    enrollCancelBtn.addEventListener('click', () => {
+      console.log('[ENROLLMENT UI] Cancel clicked');
+      const shouldResume = enrollmentState.wasStreaming;
+      enrollmentState.pendingFaceEncoding = null;
+      enrollmentState.pendingName = null;
+      enrollmentState.active = false;
+      enrollmentState.wasStreaming = false;
+      updateEnrollmentUI();
+      speak('Enrollment cancelled');
+      if (shouldResume) setTimeout(() => startStreaming(), 300);
+    });
     async function handleVoiceMode(modeData, originalCommand) {
       const { mode, prompt, endpoint } = modeData;
 
@@ -832,8 +1166,8 @@
 
             const result = await response.json();
 
-            output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.description}`;
-            speak(result.description);
+            output.innerHTML = `<strong>Question:</strong> ${originalCommand}<br><strong>Answer:</strong> ${result.text}`;
+            speak(result.text);
 
           } catch (err) {
             console.error('[VISION ERROR]', err);

@@ -49,4 +49,7 @@ def compare_face_to_db(face_encoding, db):
         min_d = float(np.min(distances))
         if min_d < best_dist:
             best_dist, best_name = min_d, name
+    
+    # Add logging for debugging
+    print(f"[FACE MATCH] Best match: {best_name} (distance: {best_dist:.4f})")
     return best_name, best_dist

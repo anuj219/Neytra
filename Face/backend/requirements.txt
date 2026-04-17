@@ -11,3 +11,4 @@ speechrecognition
 keyboard
 google-generativeai
 python-dotenv
+groq
