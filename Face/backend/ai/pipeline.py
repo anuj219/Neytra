@@ -108,12 +108,68 @@ def cleanup_unknown_trackers(ttl=UNKNOWN_TRACKER_TTL):
     now = time.time()
     cutoff_time = now - DETECTION_WINDOW_SECONDS - 5.0  # Keep up to 20s worth of data
     stale_keys = []
+    before_count = len(unknown_face_trackers)
+    print(f"[TRACKER CLEANUP] Starting cleanup, {before_count} trackers")
     for key, tracker in unknown_face_trackers.items():
+        before_ts = len(tracker["timestamps"])
         tracker["timestamps"] = [t for t in tracker["timestamps"] if t > cutoff_time]
+        after_ts = len(tracker["timestamps"])
+        if before_ts != after_ts:
+            print(f"[TRACKER CLEANUP] Tracker {key}: removed {before_ts - after_ts} old timestamps")
         if not tracker["timestamps"]:
             stale_keys.append(key)
+            print(f"[TRACKER CLEANUP] Marking tracker {key} as stale (no timestamps)")
     for key in stale_keys:
         del unknown_face_trackers[key]
+    after_count = len(unknown_face_trackers)
+    if before_count != after_count:
+        print(f"[TRACKER CLEANUP] Removed {before_count - after_count} stale trackers, {after_count} remaining")
+
+
+def get_position_from_bbox(bbox, frame_width):
+    """Determine left/center/right position from bounding box"""
+    x1, y1, x2, y2 = bbox
+    center_x = (x1 + x2) / 2
+    left_boundary = frame_width * 0.33
+    right_boundary = frame_width * 0.66
+    
+    if center_x < left_boundary:
+        return "left"
+    elif center_x > right_boundary:
+        return "right"
+    else:
+        return "center"
+
+
+def find_matching_unknown_tracker(face_enc, bbox):
+    best_id = None
+    best_dist = float("inf")
+    print(f"[TRACKER] Looking for matching tracker for bbox {bbox}")
+
+    for tracker_id, tracker in unknown_face_trackers.items():
+        if "encodings" not in tracker or not tracker["encodings"]:
+            continue
+
+        center_dist = tracker_center_distance(bbox, tracker["bbox"])
+        print(f"[TRACKER] Checking tracker {tracker_id}: center_dist={center_dist:.1f}, max={UNKNOWN_TRACKER_MAX_CENTER_DIST}")
+        if center_dist > UNKNOWN_TRACKER_MAX_CENTER_DIST:
+            continue
+
+        # Compare against the tracker's recent encodings
+        for old_enc in tracker["encodings"]:
+            from face_recognition import face_distance
+            dist = float(face_distance([old_enc], face_enc)[0])
+            print(f"[TRACKER] Distance to tracker {tracker_id}: {dist:.4f}")
+            if dist < best_dist:
+                best_dist = dist
+                best_id = tracker_id
+
+    if best_dist <= UNKNOWN_TRACKER_MATCH_DIST:
+        print(f"[TRACKER] Matched tracker {best_id} with dist {best_dist:.4f} <= {UNKNOWN_TRACKER_MATCH_DIST}")
+        return best_id
+    else:
+        print(f"[TRACKER] No match found, best dist {best_dist:.4f} > {UNKNOWN_TRACKER_MATCH_DIST}")
+        return None
 
 
 def tracker_center_distance(bbox1, bbox2):
@@ -124,31 +180,6 @@ def tracker_center_distance(bbox1, bbox2):
     cx2 = (x3 + x4) / 2
     cy2 = (y3 + y4) / 2
     return np.hypot(cx1 - cx2, cy1 - cy2)
-
-
-def find_matching_unknown_tracker(face_enc, bbox):
-    best_id = None
-    best_dist = float("inf")
-
-    for tracker_id, tracker in unknown_face_trackers.items():
-        if "encodings" not in tracker or not tracker["encodings"]:
-            continue
-
-        center_dist = tracker_center_distance(bbox, tracker["bbox"])
-        if center_dist > UNKNOWN_TRACKER_MAX_CENTER_DIST:
-            continue
-
-        # Compare against the tracker's recent encodings
-        for old_enc in tracker["encodings"]:
-            from face_recognition import face_distance
-            dist = float(face_distance([old_enc], face_enc)[0])
-            if dist < best_dist:
-                best_dist = dist
-                best_id = tracker_id
-
-    if best_dist <= UNKNOWN_TRACKER_MATCH_DIST:
-        return best_id
-    return None
 
 
 # Helper functions for per-person caching
@@ -162,19 +193,30 @@ def boxes_distance(b1, b2):
     return np.hypot(c1[0]-c2[0], c1[1]-c2[1])
 
 def find_recent_for_box(box, max_dist=80):
+    now = time.time()
+    print(f"[CACHE] Looking for recent entry for box {box}, max_dist={max_dist}")
     for entry in recent_people:
-        if boxes_distance(entry['box'], box) < max_dist:
+        if now - entry['time'] > PERSON_COOLDOWN:
+            print(f"[CACHE] Skipping expired entry: {entry['name']} at {now - entry['time']:.1f}s ago")
+            continue
+        dist = boxes_distance(entry['box'], box)
+        print(f"[CACHE] Checking entry {entry['name']}: dist={dist:.1f}, time_diff={now - entry['time']:.1f}s")
+        if dist < max_dist:
+            print(f"[CACHE] Found matching recent entry: {entry['name']} (dist={dist:.1f})")
             return entry
+    print(f"[CACHE] No recent entry found for box {box}")
     return None
 
 def update_recent(box, name):
-    entry = find_recent_for_box(box)
     now = time.time()
+    entry = find_recent_for_box(box)
     if entry:
+        print(f"[CACHE] Updating existing entry: {entry['name']} -> {name}")
         entry['box'] = box
         entry['name'] = name
         entry['time'] = now
     else:
+        print(f"[CACHE] Adding new entry: {name} at {box}")
         recent_people.append({'box': box, 'name': name, 'time': now})
 
 def cleanup_recent(ttl=5.0):
@@ -183,10 +225,14 @@ def cleanup_recent(ttl=5.0):
     """
     global recent_people
     now = time.time()
+    before = len(recent_people)
     recent_people = [
         entry for entry in recent_people
         if now - entry['time'] < ttl
     ]
+    after = len(recent_people)
+    if before != after:
+        print(f"[CACHE] Cleaned up {before - after} expired entries, {after} remaining")
 
 
 def process_frame_face(frame):
@@ -197,6 +243,8 @@ def process_frame_face(frame):
     print("[PIPELINE] Running FACE RECOGNITION mode")
     
     cleanup_unknown_trackers()
+    
+    frame_width = frame.shape[1]
     
     # Step 1: detect objects/persons
     detections = detect_yolo(frame, fast_mode=False)
@@ -211,6 +259,8 @@ def process_frame_face(frame):
     names_this_frame = set()
     results = []
 
+    print(f"[PIPELINE] Processing {len(detections)} detections")
+
     for det in detections:
         label = det["label"].lower()
         x1, y1, x2, y2 = det["bbox"]
@@ -221,7 +271,10 @@ def process_frame_face(frame):
         y2 = max(0, min(h, y2))
         
         if x2 <= x1 or y2 <= y1:
+            print(f"[FACE] Skipping invalid bbox: {x1},{y1},{x2},{y2}")
             continue
+
+        print(f"[FACE] Processing detection: {label} at {x1},{y1},{x2},{y2}")
 
         if label in PERSON_LABELS:
             # Check cache first
@@ -237,6 +290,7 @@ def process_frame_face(frame):
                     "type": "face",
                     "name": name,
                     "bbox": det["bbox"],
+                    "position": get_position_from_bbox(det["bbox"], frame_width),
                     "announce": announce,
                     "face_encoding": None
                 })
@@ -244,8 +298,10 @@ def process_frame_face(frame):
                 continue
 
             # Run fresh face recognition
+            print(f"[FACE] Running fresh recognition for {label}")
             crop = frame[y1:y2, x1:x2]
             if crop.size == 0:
+                print(f"[FACE] Empty crop for {label}")
                 update_recent((x1, y1, x2, y2), None)
                 continue
 
@@ -266,18 +322,22 @@ def process_frame_face(frame):
                         (top, right + offset_x, bottom, left + offset_x)
                         for (top, right, bottom, left) in face_locs
                     ]
+                print(f"[FACE] Found {len(face_encs)} faces in ROI")
 
             if not face_encs:
                 rgb_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 face_locs = face_recognition.face_locations(rgb_crop)
                 face_encs = face_recognition.face_encodings(rgb_crop, face_locs)
+                print(f"[FACE] Found {len(face_encs)} faces in full crop")
 
             if not face_encs:
+                print(f"[FACE] No faces found in {label} detection")
                 update_recent((x1, y1, x2, y2), None)
                 results.append({
                     "type": "face",
                     "name": "unknown",
                     "bbox": det["bbox"],
+                    "position": get_position_from_bbox(det["bbox"], frame_width),
                     "announce": False,
                     "face_encoding": None
                 })
@@ -297,6 +357,7 @@ def process_frame_face(frame):
                         "name": best_name,
                         "distance": best_dist,
                         "bbox": det["bbox"],
+                        "position": get_position_from_bbox(det["bbox"], frame_width),
                         "announce": announce,
                         "face_encoding": None  # Don't transmit known faces
                     })
@@ -342,6 +403,7 @@ def process_frame_face(frame):
                         "type": "face",
                         "name": "unknown",
                         "bbox": det["bbox"],
+                        "position": get_position_from_bbox(det["bbox"], frame_width),
                         "announce": False,
                         "face_encoding": encoded_face,
                         "prompt_enrollment": prompt_enroll,

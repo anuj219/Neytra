@@ -70,7 +70,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Any, Optional
-from ai.pipeline import process_frame, process_frame_scan, process_frame_quickscan, process_frame_face, reload_database
+from ai.pipeline import process_frame, process_frame_scan, process_frame_quickscan, process_frame_face, reload_database, PERSON_LABELS
 from ai.enrollment import (
     initiate_enrollment, ask_for_name, confirm_name, 
     complete_enrollment, cancel_enrollment, save_unknown_face,
@@ -326,26 +326,26 @@ def fallback_intent(command: str) -> dict:
         }
 
     # --- Scan: normal object detection ---
-    if any(word in command for word in ["what do you see", "describe", "what's in front", "objects", "around me"]):
+    if any(word in command for word in ["what do you see", "describe", "what's in front", "objects", "around me", "scan", "scene", "look around"]):
         return {
             "mode": "scan",
             "prompt": "",
         }
 
     # --- Face mode (recognition or enrollment both use 'face') ---
-    if any(word in command for word in ["who is", "identify", "recognize", "who am i", "face"]):
+    if any(word in command for word in ["who is", "identify", "recognize", "who am i", "face", "person", "name"]) and not any(word in command for word in ["what is", "describe", "analyze", "explain"]):
         return {
             "mode": "face",
             "prompt": "",
         }
-    if any(word in command for word in ["add person", "enroll", "remember", "new person", "save face"]):
+    if any(word in command for word in ["add person", "enroll", "remember", "new person", "save face", "add this person"]):
         return {
             "mode": "face",
             "prompt": "",
         }
 
     # --- Vision LLM mode ---
-    if any(word in command for word in ["explain this", "analyze this", "what is happening", "question about image", "tell me about this"]):
+    if any(word in command for word in ["analyze", "explain", "what is happening", "what is this", "tell me about this", "describe this", "describe what", "what does it look like"]):
         return {
             "mode": "vision",
             "prompt": command,  # user question becomes prompt
@@ -370,9 +370,9 @@ def fallback_intent(command: str) -> dict:
 @app.post("/api/scan")
 async def scan_endpoint(file: UploadFile = File(...)):
     """
-    SCAN MODE: Standard object detection
+    SCAN MODE: Standard object detection + face recognition when persons detected
     Frontend sends image every 10 seconds
-    Returns detected objects and their locations
+    Returns detected objects and faces
     """
     try:
         print("\n[API] /api/scan - Processing frame")
@@ -383,8 +383,20 @@ async def scan_endpoint(file: UploadFile = File(...)):
         frame_rgb = np.array(img)
         frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
-        # Process with scan mode
+        # Process with scan mode (object detection)
         results = process_frame_scan(frame)
+
+        # Check if any persons detected
+        has_person = any(r.get('label', '').lower() in PERSON_LABELS for r in results)
+        
+        if has_person:
+            print("[SCAN] Person detected - running face recognition")
+            # Also run face recognition
+            face_results = process_frame_face(frame)
+            # Add face detections to results
+            faces = [r for r in face_results if r["type"] == "face"]
+            results.extend(faces)
+            print(f"[SCAN] Added {len(faces)} face detections")
 
         # Get navigation guidance
         guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
@@ -409,7 +421,7 @@ async def scan_endpoint(file: UploadFile = File(...)):
 @app.post("/api/quickscan")
 async def quickscan_endpoint(file: UploadFile = File(...)):
     """
-    QUICKSCAN MODE: Fast object detection for urgent scenarios
+    QUICKSCAN MODE: Fast object detection for urgent scenarios + face recognition when persons detected
     Optimized for speed, prioritizes obstacles and people
     """
     try:
@@ -422,6 +434,18 @@ async def quickscan_endpoint(file: UploadFile = File(...)):
 
         # Process with quickscan mode
         results = process_frame_quickscan(frame)
+
+        # Check if any persons detected
+        has_person = any(r.get('label', '').lower() in PERSON_LABELS for r in results)
+        
+        if has_person:
+            print("[QUICKSCAN] Person detected - running face recognition")
+            # Also run face recognition
+            face_results = process_frame_face(frame)
+            # Add face detections to results
+            faces = [r for r in face_results if r["type"] == "face"]
+            results.extend(faces)
+            print(f"[QUICKSCAN] Added {len(faces)} face detections")
 
         # Get navigation guidance
         guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
@@ -668,7 +692,12 @@ async def analyze_scene(file: UploadFile = File(...)):
     description = generate_scene_description(img_bytes, prompt)
     print(f"[API] Sending response: {description[:50]}...")
     
-    return {"text": description}
+    return {
+        "mode": "vision",
+        "status": "success",
+        "description": description,
+        "text": description
+    }
 
 
 

@@ -302,7 +302,7 @@
     let intervalId = null;
     let isListening = false;
     let recognition = null;
-    let currentMode = 'face'; // scan, quickscan, face, vision
+    let currentMode = 'scan'; // scan, quickscan, face, vision
     let isProcessing = false;
     
     // Enrollment state 
@@ -342,15 +342,29 @@
     const toggleBtn = document.getElementById("toggleBtn");
     const analyzeBtn = document.getElementById("analyzeBtn");
 
+    // Announce cooldowns for known people
+    const nameCooldowns = {};
+    const NAME_COOLDOWN_SECONDS = 30;
+
+    function shouldAnnounceName(name) {
+      const now = Date.now() / 1000;
+      const lastAnnounced = nameCooldowns[name] || 0;
+      if (now - lastAnnounced >= NAME_COOLDOWN_SECONDS) {
+        nameCooldowns[name] = now;
+        return true;
+      }
+      return false;
+    }
+
     // =============================================
     // MODE CONFIGURATION
     // =============================================
     const MODE_CONFIG = {
       scan: {
         endpoint: '/api/scan',
-        interval: 10000, // 10 seconds
+        interval: 3000, // 3 seconds
         name: 'SCAN MODE',
-        description: 'Standard object detection every 10 seconds'
+        description: 'Standard object detection every 3 seconds'
       },
       quickscan: {
         endpoint: '/api/quickscan',
@@ -394,13 +408,23 @@
     }
 
     // Initialize camera on load
-    startCamera();
+    startCamera()
+      .then(() => {
+        switchMode('scan');
+        startStreaming();
+      })
+      .catch(() => {
+        // Camera failed to start; user can still manually start scanning after granting permission
+      });
 
     // =============================================
     // 2. FRAME CAPTURE AND SEND
     // =============================================
-    async function captureAndSendFrame() {
-      if (!streaming || isProcessing) return;
+    async function captureAndSendFrame(force = false) {
+      if (!force && (!streaming || isProcessing)) {
+        console.log('[FRAME] Skipping capture; streaming:', streaming, 'isProcessing:', isProcessing, 'force:', force);
+        return;
+      }
 
       isProcessing = true;
 
@@ -439,14 +463,11 @@
       }
     }
 
-    // =============================================
-    // 3. MODE-SPECIFIC RESPONSE HANDLING
-    // =============================================
     function handleModeResponse(data) {
       switch (currentMode) {
         case 'scan':
         case 'quickscan':
-          handleObjectDetection(data);
+          handleScanResponse(data);
           break;
         case 'face':
           handleFaceRecognition(data);
@@ -457,11 +478,14 @@
       }
     }
 
-    function handleObjectDetection(data) {
-      if (!data.detections || data.detections.length === 0) {
-        output.innerHTML = "<strong>Status:</strong> No objects detected.";
-        return;
-      }
+    function handleScanResponse(data) {
+      // Separate objects and faces
+      const objects = data.detections.filter(d => d.type !== 'face');
+      const faces = data.detections.filter(d => d.type === 'face');
+
+      // Handle objects
+      let text = `<strong>Detected (${data.mode}):</strong><br>`;
+      const phrases = [];
 
       const FRAME_WIDTH = 640;
       const center = FRAME_WIDTH / 2;
@@ -476,11 +500,7 @@
         return "ahead";
       }
 
-      let text = `<strong>Detected (${data.mode}):</strong><br>`;
-      const phrases = [];
-
-      let personDetected = false;
-      data.detections.forEach((det) => {
+      objects.forEach((det) => {
         const labelLower = det.label.toLowerCase();
         const pos = getPosition(det.bbox);
         const priority = det.priority ? '⚠ ' : '';
@@ -488,23 +508,54 @@
 
         text += `${priority}📦 ${det.label} ${pos} ${confidence}<br>`;
 
-        if (det.label && ['person', 'face', 'human'].includes(labelLower)) {
-          personDetected = true;
-        }
-
         if (det.priority || currentMode === 'quickscan') {
           phrases.push(`${det.label} ${pos}`);
         }
       });
 
-      if (personDetected && currentMode !== 'face') {
-        speak('Face detected. Switching to face recognition.');
-        switchMode('face');
-        if (streaming) {
-          stopStreaming();
-          startStreaming();
-        }
-        return;
+      // Handle faces
+      if (faces && faces.length > 0) {
+        faces.forEach((face) => {
+          const icon = face.name === 'unknown' ? '❓' : '👤';
+          text += `${icon} ${face.name}<br>`;
+
+          if (face.announce && face.name !== 'unknown') {
+            if (shouldAnnounceName(face.name)) {
+              phrases.push(face.name);
+            }
+          }
+          
+          // Check if unknown face has encoding (eligible for enrollment)
+          if (face.name === 'unknown' && face.face_encoding) {
+            console.log('[FACE RECOGNITION] Found unknown face with encoding for enrollment');
+            if (!enrollmentState.active) {
+              enrollmentState.pendingFaceEncoding = face.face_encoding;
+              enrollmentState.pendingEnrollmentPrompted = true;
+              updateEnrollmentUI();
+
+              if (face.prompt_enrollment) {
+                const enrollText = 'Unknown person seen enough times. Starting enrollment now. Please say the person\'s name.';
+                output.innerHTML = `<strong>Enrollment:</strong> ${enrollText}`;
+                voiceFeedback.textContent = 'Enrollment started. Say the person\'s name.';
+                updateStatus('Enrollment active', true);
+                speak(enrollText);
+                setTimeout(beginEnrollment, 300);
+              } else {
+                const promptText = `Unknown person detected ${face.detection_count} times. Keep them in frame for 3 detections within 15 seconds to enroll.`;
+                output.innerHTML = `<strong>Enrollment pending:</strong> ${promptText}`;
+                speak(promptText);
+                voiceFeedback.textContent = promptText;
+                updateStatus('Enrollment pending', false);
+              }
+            }
+          } else if (face.name === 'unknown' && !face.face_encoding) {
+            console.log('[ENROLLMENT] Unknown face found but no encoding - cannot enroll');
+          }
+        });
+      }
+
+      if (!objects.length && !faces.length) {
+        text += "No objects or faces detected.";
       }
 
       // Navigation Guidance Override
@@ -515,8 +566,7 @@
       } else {
         output.innerHTML = text;
         if (phrases.length > 0) {
-          const sentence = phrases.join(", ");
-          speak(sentence);
+          speak(phrases.join(", ") + " detected");
         }
       }
     }
@@ -535,7 +585,9 @@
           text += `${icon} ${face.name}<br>`;
 
           if (face.announce && face.name !== 'unknown') {
-            phrases.push(face.name);
+            if (shouldAnnounceName(face.name)) {
+              phrases.push(face.name);
+            }
           }
           
           // Check if unknown face has encoding (eligible for enrollment)
@@ -571,13 +623,18 @@
         updateEnrollmentUI();
 
         if (unknownFaceWithEncoding.prompt_enrollment) {
-          speak('Unknown person seen enough times. Starting enrollment now. Please say the person’s name.');
+          const enrollText = 'Unknown person seen enough times. Starting enrollment now. Please say the person’s name.';
+          output.innerHTML = `<strong>Enrollment:</strong> ${enrollText}`;
           voiceFeedback.textContent = 'Enrollment started. Say the person’s name.';
-          beginEnrollment();
+          updateStatus('Enrollment active', true);
+          speak(enrollText);
+          setTimeout(beginEnrollment, 300);
         } else {
           const promptText = `Unknown person detected ${unknownFaceWithEncoding.detection_count} times. Keep them in frame for 3 detections within 15 seconds to enroll.`;
+          output.innerHTML = `<strong>Enrollment pending:</strong> ${promptText}`;
           speak(promptText);
           voiceFeedback.textContent = promptText;
+          updateStatus('Enrollment pending', false);
         }
       } else if (unknownFaceFound && !unknownFaceWithEncoding) {
         console.log('[ENROLLMENT] Unknown face found but no encoding - cannot enroll');
@@ -585,9 +642,10 @@
     }
 
     function handleVisionAnalysis(data) {
-      if (data.description) {
-        output.innerHTML = `<strong>Vision Analysis:</strong><br>${data.description}`;
-        speak(data.description);
+      const visionText = data.description || data.text;
+    if (visionText) {
+        output.innerHTML = `<strong>Vision Analysis:</strong><br>${visionText}`;
+        speak(visionText);
       } else {
         output.innerHTML = "<strong>Error:</strong> No analysis received.";
       }
@@ -678,24 +736,26 @@
     };
 
     analyzeBtn.onclick = async () => {
-      // Stop current streaming
+      const previousMode = currentMode;
+      const wasStreamingBefore = streaming;
+
       if (streaming) {
         stopStreaming();
       }
 
-      // Switch to vision mode temporarily
-      const previousMode = currentMode;
-      currentMode = 'vision';
-
+      switchMode('vision');
       output.innerHTML = "<strong>Status:</strong> Analyzing scene...";
       speak("Analyzing scene");
       updateStatus("Analyzing", false);
 
-      await captureAndSendFrame();
+      await captureAndSendFrame(true);
 
-      // Return to previous mode
-      currentMode = previousMode;
-      updateStatus("Ready", false);
+      switchMode(previousMode);
+      if (wasStreamingBefore) {
+        startStreaming();
+      } else {
+        updateStatus("Ready", false);
+      }
     };
 
     // =============================================
@@ -987,6 +1047,7 @@
         enrollmentState.active = false;
         enrollmentState.wasStreaming = false;
         voiceFeedback.textContent = '';
+        updateStatus('Ready', false);
 
         if (shouldResume) {
           // small delay to let TTS finish speaking the success message
@@ -1006,6 +1067,7 @@
         enrollmentState.pendingName = null;
         enrollmentState.active = false;
         enrollmentState.wasStreaming = false;
+        updateStatus('Ready', false);
 
         if (shouldResumeOnError) {
           setTimeout(() => {
@@ -1066,7 +1128,7 @@
       enrollmentState.pendingEnrollmentPrompted = false;
       enrollmentState.pendingName = null;
       updateEnrollmentUI();
-      speak("Please say the person's name now.");
+      updateStatus('Enrollment active', true);
       voiceFeedback.textContent = 'Ready for name input...';
     }
 
@@ -1101,6 +1163,7 @@
       enrollmentState.active = false;
       enrollmentState.wasStreaming = false;
       updateEnrollmentUI();
+      updateStatus('Ready', false);
       speak('Enrollment cancelled');
       if (shouldResume) setTimeout(() => startStreaming(), 300);
     });
@@ -1174,10 +1237,15 @@
             speak('Sorry, I could not analyze the scene');
           }
           break;
-
+        case 'interaction':
+          switchMode('scan');
+          output.innerHTML = `<strong>Interaction:</strong> ${prompt || originalCommand}`;
+          speak(prompt || 'Okay');
+          break;
         default:
-          console.log('[VOICE] Unknown mode:', mode);
-          speak('I did not understand that command');
+          switchMode('scan');
+          output.innerHTML = `<strong>Unknown mode:</strong> ${mode}. Returning to scan.`;
+          speak('Switching back to scan mode');
       }
     }
 
