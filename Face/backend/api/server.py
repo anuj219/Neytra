@@ -405,12 +405,21 @@ async def scan_endpoint(file: UploadFile = File(...)):
         else:
             print("[NAVIGATION] Path clear")
 
+        # Check for enrollment prompts
+        enrollment_prompt = None
+        for detection in results:
+            if detection.get("type") == "face" and detection.get("name") == "unknown" and detection.get("prompt_enrollment"):
+                enrollment_prompt = f"Enrolling person, please state their name"
+                print(f"[ENROLLMENT] Triggered enrollment voice prompt")
+                break
+
         return JSONResponse({
             "mode": "scan",
             "status": "success",
             "detections": results,
             "count": len(results),
-            "navigation": guidance
+            "navigation": guidance,
+            "enrollment_prompt": enrollment_prompt
         })
     
     except Exception as e:
@@ -449,6 +458,18 @@ async def quickscan_endpoint(file: UploadFile = File(...)):
 
         # Get navigation guidance
         guidance = get_navigation_guidance(results, frame_width=frame.shape[1])
+        if guidance:
+            print(f"[NAVIGATION] Guidance: {guidance}")
+        else:
+            print("[NAVIGATION] Path clear")
+
+        # Check for enrollment prompts
+        enrollment_prompt = None
+        for detection in results:
+            if detection.get("type") == "face" and detection.get("name") == "unknown" and detection.get("prompt_enrollment"):
+                enrollment_prompt = f"Enrolling person, please state their name"
+                print(f"[ENROLLMENT] Triggered enrollment voice prompt")
+                break
 
         return JSONResponse({
             "mode": "quickscan",
@@ -456,7 +477,8 @@ async def quickscan_endpoint(file: UploadFile = File(...)):
             "detections": results,
             "count": len(results),
             "priority": "high",
-            "navigation": guidance
+            "navigation": guidance,
+            "enrollment_prompt": enrollment_prompt
         })
     
     except Exception as e:
@@ -485,13 +507,26 @@ async def face_recognition_endpoint(file: UploadFile = File(...)):
         faces = [r for r in results if r["type"] == "face"]
         objects = [r for r in results if r["type"] == "object"]
 
-        return JSONResponse({
+        # Check for enrollment prompts
+        enrollment_prompt = None
+        for detection in faces:
+            if detection.get("name") == "unknown" and detection.get("prompt_enrollment"):
+                enrollment_prompt = f"Enrolling person, please state their name"
+                print(f"[ENROLLMENT] Triggered enrollment voice prompt")
+                break
+
+        response_data = {
             "mode": "face",
             "status": "success",
             "faces": faces,
             "objects": objects,
             "total_detections": len(results)
-        })
+        }
+        
+        if enrollment_prompt:
+            response_data["enrollment_prompt"] = enrollment_prompt
+
+        return JSONResponse(response_data)
     
     except Exception as e:
         print(f"[FACE ERROR] {e}")

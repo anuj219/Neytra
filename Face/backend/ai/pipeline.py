@@ -193,6 +193,7 @@ def boxes_distance(b1, b2):
     return np.hypot(c1[0]-c2[0], c1[1]-c2[1])
 
 def find_recent_for_box(box, max_dist=80):
+    """Find cached entry for optimization only. Don't use for announcement logic."""
     now = time.time()
     print(f"[CACHE] Looking for recent entry for box {box}, max_dist={max_dist}")
     for entry in recent_people:
@@ -348,7 +349,7 @@ def process_frame_face(frame):
                 best_name, best_dist = compare_face_to_db(face_enc, db)
 
                 if best_name and best_dist < FACE_MATCH_THRESHOLD:
-                    announce = update_presence(best_name)
+                    announce = update_presence(best_name)  # This checks 30-second RE_ENCOUNTER_TIME
                     names_this_frame.add(best_name)
                     update_recent((x1, y1, x2, y2), best_name)
 
@@ -359,9 +360,10 @@ def process_frame_face(frame):
                         "bbox": det["bbox"],
                         "position": get_position_from_bbox(det["bbox"], frame_width),
                         "announce": announce,
-                        "face_encoding": None  # Don't transmit known faces
+                        "face_encoding": None,  # Don't transmit known faces
+                        "announcement_reason": "30-second cooldown check via encounter_state"
                     })
-                    print(f"[FACE] Recognized: {best_name} (distance: {best_dist:.3f}, threshold: {FACE_MATCH_THRESHOLD})")
+                    print(f"[FACE] Recognized: {best_name} (distance: {best_dist:.3f}, threshold: {FACE_MATCH_THRESHOLD}, announce={announce})")
                 else:
                     # Unknown face - include encoding for potential enrollment
                     bytes_data = face_enc.astype(np.float32).tobytes()
