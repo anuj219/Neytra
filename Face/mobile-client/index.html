@@ -410,8 +410,7 @@
     // =============================================
     // CONFIGURATION
     // =============================================
-    const backendURL = "http://10.67.168.33:8000";
-
+const backendURL = "http://192.168.29.118:8000";
     // =============================================
     // STATE MANAGEMENT
     // =============================================
@@ -481,14 +480,12 @@
 
     function shouldAnnounceName(name) {
       const now = Date.now() / 1000;
-      const lastDetected = nameCooldowns[name] || 0;
-      const timeDiff = now - lastDetected;
-      
-      // Update the last detected time to NOW on EVERY check
-      nameCooldowns[name] = now;
+      const lastAnnounced = nameCooldowns[name] || 0;
+      const timeDiff = now - lastAnnounced;
 
-      // Only announce if it has been >= 30 seconds since the LAST detection
-      if (lastDetected === 0 || timeDiff >= NAME_COOLDOWN_SECONDS) {
+      // Only announce if first time OR >= 30 seconds since LAST announcement
+      if (lastAnnounced === 0 || timeDiff >= NAME_COOLDOWN_SECONDS) {
+        nameCooldowns[name] = now;  // only update when actually announcing
         return true;
       }
       return false;
@@ -641,6 +638,10 @@
         return "ahead";
       }
 
+      // Track last spoken objects to avoid repeating every frame
+      const lastObjects = window._lastSpokenObjects || new Set();
+      const newObjects = new Set();
+
       objects.forEach((det) => {
         const labelLower = det.label.toLowerCase();
         const pos = getPosition(det.bbox);
@@ -649,10 +650,13 @@
 
         text += `${priority}📦 ${det.label} ${pos} ${confidence}<br>`;
 
-        if (det.priority || currentMode === 'quickscan') {
+        const objKey = `${det.label}_${pos}`;
+        newObjects.add(objKey);
+        if ((det.priority || currentMode === 'quickscan') && !lastObjects.has(objKey)) {
           phrases.push(`${det.label} ${pos}`);
         }
       });
+      window._lastSpokenObjects = newObjects;
 
       // Handle faces
       if (facesContainer) facesContainer.innerHTML = '';
@@ -713,11 +717,16 @@
         text += "No objects or faces detected.";
       }
 
-      // Navigation Guidance Override
+      // Navigation Guidance Override (with its own cooldown)
       if (data.navigation) {
         text = `[NAV_SYS] ${data.navigation}<br><hr>` + text;
         if (output) output.innerHTML = text;
-        speak(data.navigation);
+        const now = Date.now() / 1000;
+        const lastNavSpeak = window._lastNavSpeakTime || 0;
+        if (now - lastNavSpeak >= 10) {
+          speak(data.navigation);
+          window._lastNavSpeakTime = now;
+        }
       } else {
         if (output) output.innerHTML = text;
         if (phrases.length > 0) {
