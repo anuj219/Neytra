@@ -308,6 +308,94 @@
     .stat-val { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
     .stat-box.highlight .stat-val { font-family: 'Syncopate'; font-size: 14px; letter-spacing: 1px; }
     .stat-lbl { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+
+    /* Settings Modal */
+    .settings-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--glass-bg);
+      border: 1px solid var(--border-dark);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .settings-icon:hover {
+      border-color: var(--border-cyan);
+    }
+    .settings-icon svg { width: 18px; height: 18px; fill: var(--text-muted); }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--glass-bg);
+      border: 1px solid var(--border-cyan);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 229, 255, 0.2);
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--border-cyan);
+    }
+    .modal-input {
+      width: 100%;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-dark);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-family: monospace;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .modal-input:focus {
+      outline: none;
+      border-color: var(--border-cyan);
+      background: rgba(0, 229, 255, 0.05);
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modal-btn.save {
+      background: var(--border-cyan);
+      color: #000;
+    }
+    .modal-btn.close {
+      background: var(--border-dark);
+      color: var(--text-main);
+    }
   </style>
 </head>
 
@@ -325,9 +413,14 @@
           <div class="brand-sub">SPATIAL AI</div>
         </div>
       </div>
-      <div class="connection-status disconnected" id="connectionStatus">
-        <div class="status-dot disconnected" id="statusDot"></div>
-        <span id="statusText">Disconnected</span>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <div class="connection-status disconnected" id="connectionStatus">
+          <div class="status-dot disconnected" id="statusDot"></div>
+          <span id="statusText">Disconnected</span>
+        </div>
+        <div class="settings-icon" id="settingsIcon" title="Configure backend">
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.62l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.49.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.48.1.62l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.62l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.49-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.62l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </div>
       </div>
     </div>
 
@@ -410,7 +503,26 @@
     // =============================================
     // CONFIGURATION
     // =============================================
-const backendURL = "http://192.168.29.118:8000";
+    // Get backend URL from localStorage, query param, or use localhost as fallback
+    let backendURL = localStorage.getItem('backendURL');
+    
+    // Check for URL query parameter (e.g., ?backend=192.168.1.1:8000)
+    const urlParams = new URLSearchParams(window.location.search);
+    const backendParam = urlParams.get('backend');
+    if (backendParam) {
+      backendURL = `http://${backendParam}`;
+      localStorage.setItem('backendURL', backendURL);
+      console.log('[CONFIG] ');
+    }
+    
+    // If still not set, try localhost first, then prompt user
+    if (!backendURL) {
+      backendURL = "http://192.168.29.118:8000";
+      console.log('[CONFIG] hardcoded');
+      // Optionally: show UI to configure later if localhost fails
+    }
+    
+    console.log('[CONFIG] Backend URL:', backendURL);
     // =============================================
     // STATE MANAGEMENT
     // =============================================
@@ -420,6 +532,7 @@ const backendURL = "http://192.168.29.118:8000";
     let recognition = null;
     let currentMode = 'scan'; // scan, quickscan, face, vision
     let isProcessing = false;
+    let wasStreamingBeforeVoice = false; // Track if streaming was paused for voice input
 
     // Enrollment state 
     let enrollmentState = {
@@ -526,17 +639,30 @@ const backendURL = "http://192.168.29.118:8000";
     // =============================================
     async function startCamera() {
       try {
+        // Mobile-optimized constraints
         const constraints = {
-          video: { facingMode: { ideal: "user" } }, // Back camera, user: front
+          video: {
+            facingMode: { ideal: "user" }, // user = front camera on mobile
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            // Some mobile devices benefit from these:
+            aspectRatio: { ideal: 16 / 9 }
+          },
           audio: false,
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
+        
+        // Log actual video dimensions for debugging
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        console.log('[CAMERA] Started with dimensions:', settings.width, 'x', settings.height);
+        
         updateStatus("Ready", false);
         console.log('[CAMERA] Started successfully');
       } catch (err) {
-        output.innerHTML = `<strong>Camera Error:</strong> ${err}`;
+        output.innerHTML = `<strong>Camera Error:</strong> ${err.message}. Please check browser permissions.`;
         updateStatus("Error", false);
         console.error('[CAMERA ERROR]', err);
       }
@@ -565,8 +691,15 @@ const backendURL = "http://192.168.29.118:8000";
 
       try {
         const canvas = document.createElement("canvas");
-        canvas.width = 640;
-        canvas.height = 480;
+        
+        // Get actual video dimensions for responsive sizing
+        const videoWidth = video.videoWidth || 640;
+        const videoHeight = video.videoHeight || 480;
+        
+        // Use actual dimensions if available, otherwise use default
+        canvas.width = videoWidth > 0 ? videoWidth : 640;
+        canvas.height = videoHeight > 0 ? videoHeight : 480;
+        
         const ctx = canvas.getContext("2d");
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -578,12 +711,16 @@ const backendURL = "http://192.168.29.118:8000";
         formData.append("file", blob, "frame.jpg");
 
         const endpoint = MODE_CONFIG[currentMode].endpoint;
-        console.log(`[${currentMode.toUpperCase()}] Sending frame to ${endpoint}`);
+        console.log(`[${currentMode.toUpperCase()}] Sending frame to ${endpoint} (${canvas.width}x${canvas.height})`);
 
         const res = await fetch(`${backendURL}${endpoint}`, {
           method: "POST",
           body: formData
         });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
 
         const data = await res.json();
         console.log(`[${currentMode.toUpperCase()}] Response:`, data);
@@ -594,7 +731,7 @@ const backendURL = "http://192.168.29.118:8000";
         handleModeResponse(data);
 
       } catch (err) {
-        if (output) output.innerHTML = `<span style="color:var(--danger)">[SYS_ERR] Connection Loss: ${err}</span>`;
+        if (output) output.innerHTML = `<span style="color:#ef4444">[SYS_ERR] Connection Loss: ${err.message}</span>`;
         console.error('[FRAME ERROR]', err);
       } finally {
         isProcessing = false;
@@ -832,14 +969,23 @@ const backendURL = "http://192.168.29.118:8000";
     // =============================================
     // 4. TEXT-TO-SPEECH
     // =============================================
-    function speak(text) {
+    function speak(text, onComplete = null) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.rate = 1.0;
         msg.pitch = 1.0;
         msg.volume = 1.0;
+        
+        // Call callback when speech ends
+        if (onComplete) {
+          msg.onend = onComplete;
+        }
+        
         window.speechSynthesis.speak(msg);
+      } else if (onComplete) {
+        // If speechSynthesis not available, call callback immediately
+        onComplete();
       }
     }
 
@@ -955,6 +1101,20 @@ const backendURL = "http://192.168.29.118:8000";
           isListening = true;
           micBtn.classList.add('listening');
           voiceFeedback.innerHTML = '<span class="loading"></span> Listening...';
+          
+          // Pause streaming and cancel any ongoing TTS to avoid interruptions
+          if (streaming) {
+            console.log('[VOICE] Pausing streaming for voice input');
+            stopStreaming();
+            wasStreamingBeforeVoice = true;
+          }
+          
+          // Cancel any ongoing text-to-speech
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            console.log('[VOICE] Cancelled any ongoing TTS');
+          }
+          
           console.log('[VOICE] Started listening');
         };
 
@@ -1013,6 +1173,18 @@ const backendURL = "http://192.168.29.118:8000";
         recognition.onend = () => {
           isListening = false;
           micBtn.classList.remove('listening');
+          
+          // Resume streaming if it was paused for voice input
+          if (wasStreamingBeforeVoice && !enrollmentState.active) {
+            console.log('[VOICE] Resuming streaming after voice input');
+            setTimeout(() => {
+              if (!streaming) {
+                startStreaming();
+              }
+            }, 300); // Small delay to let voice processing complete
+            wasStreamingBeforeVoice = false;
+          }
+          
           console.log('[VOICE] Stopped listening');
         };
 
@@ -1031,7 +1203,36 @@ const backendURL = "http://192.168.29.118:8000";
     initSpeechRecognition();
 
     // =============================================
-    // 8. MICROPHONE BUTTON HANDLER
+    // 8. AUTO-START VOICE RECOGNITION (for enrollment)
+    // =============================================
+    function startVoiceRecognition() {
+      if (!recognition) {
+        console.warn('[VOICE] Recognition not available');
+        return false;
+      }
+
+      try {
+        recognition.start();
+        console.log('[VOICE] Auto-started for enrollment');
+        return true;
+      } catch (error) {
+        console.error('[VOICE] Auto-start error:', error);
+        // Already running, stop and restart
+        recognition.stop();
+        setTimeout(() => {
+          try {
+            recognition.start();
+            console.log('[VOICE] Auto-start retry successful');
+          } catch (e) {
+            console.error('[VOICE] Auto-start retry failed:', e);
+          }
+        }, 300);
+        return false;
+      }
+    }
+
+    // =============================================
+    // 9. MICROPHONE BUTTON HANDLER
     // =============================================
     if (micBtn) {
       micBtn.addEventListener('click', () => {
@@ -1086,9 +1287,13 @@ const backendURL = "http://192.168.29.118:8000";
 
             enrollmentState.active = true;
             enrollmentState.pendingEnrollmentPrompted = false;
-            speak("Okay, please say the person's name");
-            voiceFeedback.textContent = 'Ready for name input...';
+            voiceFeedback.textContent = 'Listening for name...';
             updateEnrollmentUI();
+            
+            // Auto-trigger voice recognition after TTS finishes
+            speak("Okay, please say the person's name", () => {
+              startVoiceRecognition();
+            });
             return;
           } else if (isNegative(command)) {
             speak("Enrollment cancelled");
@@ -1125,9 +1330,14 @@ const backendURL = "http://192.168.29.118:8000";
             return;
           } else if (isNegative(command)) {
             // Let user try again without resuming streaming (they are in the enrollment flow)
-            speak("Okay, let's try again. Say the person's name.");
             enrollmentState.pendingName = null;
-            voiceFeedback.textContent = 'Ready for name input...';
+            voiceFeedback.textContent = 'Listening for name...';
+            updateEnrollmentUI();
+            
+            // Auto-trigger voice recognition after TTS finishes
+            speak("Okay, let's try again. Say the person's name.", () => {
+              startVoiceRecognition();
+            });
             return;
           }
         }
@@ -1228,6 +1438,7 @@ const backendURL = "http://192.168.29.118:8000";
         enrollmentState.pendingName = null;
         enrollmentState.active = false;
         enrollmentState.wasStreaming = false;
+        wasStreamingBeforeVoice = false; // Also reset voice-paused flag
         voiceFeedback.textContent = '';
         updateStatus('Ready', false);
 
@@ -1249,6 +1460,7 @@ const backendURL = "http://192.168.29.118:8000";
         enrollmentState.pendingName = null;
         enrollmentState.active = false;
         enrollmentState.wasStreaming = false;
+        wasStreamingBeforeVoice = false; // Also reset voice-paused flag
         updateStatus('Ready', false);
 
         if (shouldResumeOnError) {
@@ -1311,7 +1523,12 @@ const backendURL = "http://192.168.29.118:8000";
       enrollmentState.pendingName = null;
       updateEnrollmentUI();
       updateStatus('Enrollment active', true);
-      voiceFeedback.textContent = 'Ready for name input...';
+      
+      // Auto-trigger voice recognition after TTS finishes
+      speak('Please say the person\'s name', () => {
+        startVoiceRecognition();
+      });
+      voiceFeedback.textContent = 'Listening for name...';
     }
 
     enrollConfirmBtn.addEventListener('click', () => {
@@ -1320,8 +1537,13 @@ const backendURL = "http://192.168.29.118:8000";
         beginEnrollment();
       } else if (enrollmentState.active && enrollmentState.pendingName) {
         completeEnrollment();
+      } else if (enrollmentState.active && !enrollmentState.pendingName) {
+        // If waiting for name input, trigger voice recognition
+        speak('Please say the person\'s name.', () => {
+          startVoiceRecognition();
+        });
       } else {
-        speak('Press the microphone and say the name when ready.');
+        speak('Please wait for name input.');
       }
     });
 
@@ -1329,12 +1551,16 @@ const backendURL = "http://192.168.29.118:8000";
       console.log('[ENROLLMENT UI] Retry name clicked');
       if (enrollmentState.active) {
         enrollmentState.pendingName = null;
-        speak("Okay, please say the person's name");
-        voiceFeedback.textContent = 'Ready for name input...';
+        voiceFeedback.textContent = 'Listening for name...';
+        updateEnrollmentUI();
+        
+        // Auto-trigger voice recognition after TTS finishes
+        speak("Okay, please say the person's name", () => {
+          startVoiceRecognition();
+        });
       } else {
         speak('Enrollment has not started yet. Press Start Enrollment first.');
       }
-      updateEnrollmentUI();
     });
 
     enrollCancelBtn.addEventListener('click', () => {
