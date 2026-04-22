@@ -74,7 +74,8 @@ from ai.pipeline import process_frame, process_frame_scan, process_frame_quicksc
 from ai.enrollment import (
     initiate_enrollment, ask_for_name, confirm_name, 
     complete_enrollment, cancel_enrollment, save_unknown_face,
-    encode_face_for_transmission, decode_face_from_transmission
+    encode_face_for_transmission, decode_face_from_transmission,
+    get_all_people, update_person_name, update_person_face, delete_person
 )
 from PIL import Image
 import numpy as np
@@ -128,6 +129,9 @@ class VoiceCommand(BaseModel):
 
 class ModeResponse(BaseModel):
     mode: str
+    operation: Optional[str] = None
+    target_name: Optional[str] = None
+    new_name: Optional[str] = None
     prompt: Optional[str] = None
     endpoint: Optional[str] = None
 
@@ -193,7 +197,7 @@ def detect_mode_groq(command: str) -> dict:
     Advanced intent detection using Groq's Llama 3.3.
     """
     try:
-        prompt = f"""You are Neytra’s intent-classification AI. Your job is to analyze a voice command and determine what the user actually wants.
+        prompt = """You are Neytra’s intent-classification AI. Your job is to analyze a voice command and determine what the user actually wants.
 
 Command: "{command}"
 
@@ -250,24 +254,42 @@ Examples:
 - “detect surroundings”
 If the command is general-purpose and NOT a question → mode = "scan".
 
+
+Additionally, if mode is "face", determine the sub-operation:
+
+FACE SUB-OPERATIONS:
+- create: "add person", "enroll", "save face", "new person"
+  Example: "add person named John"
+  
+- update_name: "update person name", "rename", "change name"
+  Example: "update Anuj Mehta to Rohit Sharma"
+  Extract: target_name="Anuj Mehta", new_name="Rohit Sharma"
+  
+- update_face: "update face", "update person face"
+  Example: "update face for Anuj Mehta"
+  Extract: target_name="Anuj Mehta"
+  
+- delete: "delete person", "remove person", "forget"
+  Example: "delete Anuj Mehta"
+  Extract: target_name="Anuj Mehta"
+
 ---------------------------------------
-IMPORTANT HARD RULES
+OUTPUT FORMAT:
+Respond ONLY with this JSON format and nothing else. Every field must be present (use null where not applicable):
+{
+    "mode": "vision|face|quickscan|scan|interaction",
+    "operation": "create|update_name|update_face|delete|null",
+    "target_name": "person_name_or_null",
+    "new_name": "new_name_or_null",
+    "prompt": "for_vision_mode_or_empty"
+}
 ---------------------------------------
-- If the user ASKED A QUESTION → ALWAYS choose "vision".
-- If the command contains words like “who” + “person” → choose "face".
+IMPORTANT HARD RULES:
+- If mode is "face", you MUST identify the operation (create, update_name, update_face, delete).
 - If the command includes “quick”, “fast”, “urgent”, “alert”, “coming”, “danger” → choose "quickscan".
-- ONLY return "scan" if NONE of the above categories match.
-
----------------------------------------
-OUTPUT FORMAT
----------------------------------------
-Respond ONLY with this JSON format and nothing else:
-
-{{
-  "mode": "mode_name",
-  "prompt": "prompt_for_vision_mode_or_empty"
-}}
-"""
+- ONLY return "scan" if NONE of the other categories match.
+- Be precise with names; "Anuj Mehta" to "Anuj Vipul Mehta" means target_name="Anuj Mehta" and new_name="Anuj Vipul Mehta".
+""".replace("{command}", command)
 
         # Call Groq API
         completion = groq_client.chat.completions.create(
@@ -801,6 +823,87 @@ async def receive_frame(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ========================
+# PEOPLE MANAGEMENT ROUTES
+# ========================
+
+@app.get("/api/people")
+def get_enrolled_people():
+    """Get list of all enrolled person names"""
+    try:
+        people = get_all_people()
+        return {
+            "status": "success",
+            "people": people,
+            "count": len(people)
+        }
+    except Exception as e:
+        print(f"[API] Error getting people: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.put("/api/enroll/update-name")
+async def update_name_endpoint(request: dict):
+    """Update a person's name in the database"""
+    try:
+        old_name = request.get("old_name")
+        new_name = request.get("new_name")
+        
+        if not old_name or not new_name:
+            raise ValueError("old_name and new_name are required")
+        
+        result = update_person_name(old_name, new_name)
+        
+        if result["status"] == "success":
+            reload_database()  # Reload so frontend gets updated list
+        
+        return result
+    except Exception as e:
+        print(f"[API] Error updating name: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.put("/api/enroll/update-face")
+async def update_face_endpoint(request: dict):
+    """Update a person's face embedding"""
+    try:
+        name = request.get("name")
+        face_encoding_b64 = request.get("face_encoding")
+        
+        if not name or not face_encoding_b64:
+            raise ValueError("name and face_encoding are required")
+        
+        # Decode the face encoding from base64
+        face_encoding = decode_face_from_transmission(face_encoding_b64)
+        
+        result = update_person_face(name, face_encoding)
+        
+        if result["status"] == "success":
+            reload_database()  # Reload so recognition works with new encoding
+        
+        return result
+    except Exception as e:
+        print(f"[API] Error updating face: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.delete("/api/enroll/{name}")
+def delete_person_endpoint(name: str):
+    """Delete a person entry from the database"""
+    try:
+        if not name:
+            raise ValueError("name is required")
+        
+        result = delete_person(name)
+        
+        if result["status"] == "success":
+            reload_database()  # Reload so person is no longer recognized
+        
+        return result
+    except Exception as e:
+        print(f"[API] Error deleting person: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ========================

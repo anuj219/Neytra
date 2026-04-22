@@ -305,3 +305,14 @@ Models Directory:
 
 models/├─ bestLatest.pt    (Primary YOLO model)├─ bestv2.pt        (Backup model)└─ bestv3.pt        (Backup model)
 Resource Constraints:
+
+
+
+<!-- Update 22nd April 2026 -->
+Voice-Powered Person Management (CRUD)
+Voice-Activated Intent Handling: Uses Groq LLM (Llama 3.3) to parse transcripts and classify sub-operations (update_name, delete, etc.), extracting names directly from your speech.
+Asynchronous Confirmation Loop: Managed by a frontend state machine (operationState) that triggers Text-to-Speech prompts and waits for a specific affirmative voice response before executing any database change.
+Case-Insensitive Name Resolution: The backend search logic iterates through stored keys using lowercase comparisons, allowing natural spoken names like "anuj" to reliably match "Anuj Mehta" in the records.
+Identity Reset (Update Face): The update_face operation overwrites existing face embeddings with a single fresh capture, preventing "identity leakage" where multiple different faces might otherwise be mapped to the same name.
+Real-Time Database Hot-Reload: Every successful update or deletion triggers an internal reload_database() call, instantly refreshing the face recognition cache without requiring a server reboot.
+<!--  -->

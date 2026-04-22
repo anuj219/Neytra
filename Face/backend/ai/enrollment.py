@@ -194,3 +194,129 @@ def save_unknown_face(face_encoding, name):
             "status": "error",
             "message": f"Failed to save: {str(e)}"
         }
+
+
+def get_all_people():
+    """
+    Get list of all enrolled person names.
+    
+    Returns:
+        list: List of person names in database
+    """
+    try:
+        db = load_database()
+        return list(db.keys())
+    except Exception as e:
+        print(f"[ENROLL] Error getting people: {e}")
+        return []
+
+
+def update_person_name(old_name: str, new_name: str):
+    """
+    Update a person's name in the database. Case-insensitive search.
+    """
+    try:
+        db = load_database()
+        
+        # Case-insensitive lookup for old name
+        actual_name = next((k for k in db.keys() if k.lower() == old_name.lower()), None)
+        
+        if not actual_name:
+            return {
+                "status": "error",
+                "message": f"Person '{old_name}' not found in database"
+            }
+        
+        # Check if new name already exists (case-insensitive)
+        if any(k.lower() == new_name.lower() for k in db.keys() if k != actual_name):
+            return {
+                "status": "error",
+                "message": f"Person '{new_name}' already exists in database"
+            }
+        
+        # Rename: move encodings from actual_name to new_name
+        db[new_name] = db.pop(actual_name)
+        save_database(db)
+        
+        print(f"[ENROLL] Renamed '{actual_name}' to '{new_name}'")
+        return {
+            "status": "success",
+            "message": f"Person renamed from {actual_name} to {new_name}",
+            "old_name": actual_name,
+            "new_name": new_name
+        }
+    except Exception as e:
+        print(f"[ENROLL] Error renaming person: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to rename: {str(e)}"
+        }
+
+
+def update_person_face(name: str, face_encoding):
+    """
+    Replace a person's face encoding in the database (Case-insensitive lookup).
+    Clears old embeddings so the person is only recognized by the new look.
+    """
+    try:
+        db = load_database()
+        
+        # Case-insensitive lookup
+        actual_name = next((k for k in db.keys() if k.lower() == name.lower()), None)
+        
+        if not actual_name:
+            return {
+                "status": "error",
+                "message": f"Person '{name}' not found in database"
+            }
+        
+        # Replace the list with only the new encoding
+        db[actual_name] = [face_encoding]
+        save_database(db)
+        
+        print(f"[ENROLL] Replaced face for '{actual_name}'")
+        return {
+            "status": "success",
+            "message": f"Face embedding replaced for {actual_name}",
+            "name": actual_name
+        }
+    except Exception as e:
+        print(f"[ENROLL] Error updating face: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to update face: {str(e)}"
+        }
+
+
+def delete_person(name: str):
+    """
+    Delete a person entry from the database (Case-insensitive lookup).
+    """
+    try:
+        db = load_database()
+        
+        # Case-insensitive lookup
+        actual_name = next((k for k in db.keys() if k.lower() == name.lower()), None)
+        
+        if not actual_name:
+            return {
+                "status": "error",
+                "message": f"Person '{name}' not found in database"
+            }
+        
+        # Delete the person using the correct case key
+        del db[actual_name]
+        save_database(db)
+        
+        print(f"[ENROLL] Deleted person '{actual_name}' from database")
+        return {
+            "status": "success",
+            "message": f"Person {actual_name} has been deleted",
+            "deleted_name": actual_name
+        }
+    except Exception as e:
+        print(f"[ENROLL] Error deleting person: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to delete: {str(e)}"
+        }

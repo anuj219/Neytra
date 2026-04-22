@@ -544,6 +544,15 @@
       wasStreaming: false
     };
 
+    // Operation state (for update/delete operations)
+    let operationState = {
+      type: null,           // 'create', 'update_name', 'update_face', 'delete', or null
+      targetName: null,     // Person being affected
+      newName: null,        // New name (for rename operations)
+      confirmed: false,     // Whether user confirmed the operation
+      faceDetected: false   // Whether face is available (for update_face)
+    };
+
     // Helper: common affirmative/negative phrases
     function isAffirmative(text) {
       if (!text) return false;
@@ -1357,6 +1366,30 @@
           return;
         }
 
+        // ===== OPERATION CONFIRMATION FLOW (Update/Delete) =====
+        if (operationState.type !== null) {
+          if (isAffirmative(command)) {
+            console.log(`[VOICE] Operation ${operationState.type} confirmed via voice`);
+            await executeOperation();
+            return;
+          } else if (isNegative(command)) {
+            const opName = operationState.type.replace('_', ' ');
+            speak(`${opName} cancelled.`);
+            operationState.type = null;
+            operationState.targetName = null;
+            operationState.newName = null;
+            operationState.confirmed = false;
+            voiceFeedback.textContent = '';
+            
+            // Resume streaming if it was active
+            if (wasStreamingBeforeVoice) {
+              setTimeout(() => startStreaming(), 300);
+            }
+            return;
+          }
+        }
+        // ===== END OPERATION CONFIRMATION FLOW =====
+
         // ===== END ENROLLMENT FLOW =====
 
         // Send command to backend for intent detection
@@ -1575,6 +1608,278 @@
       speak('Enrollment cancelled');
       if (shouldResume) setTimeout(() => startStreaming(), 300);
     });
+
+    // =============================================
+    // OPERATION HANDLERS (Update/Delete)
+    // =============================================
+
+    async function handleUpdateNameOperation(oldName, newName) {
+      try {
+        if (!oldName || !newName) {
+          speak('Update name operation incomplete. Please specify both old and new names.');
+          return;
+        }
+        
+        // Pause streaming
+        if (streaming) stopStreaming();
+        
+        operationState.type = 'update_name';
+        operationState.targetName = oldName;
+        operationState.newName = newName;
+        operationState.confirmed = false;
+        
+        const confirmationPrompt = `Do you want to update person name from ${oldName} to ${newName}? Say yes to confirm or no to cancel.`;
+        
+        output.innerHTML = `<strong>Confirm Name Update</strong><br>
+          From: ${oldName}<br>
+          To: ${newName}<br><br>
+          Say "yes" to confirm or "no" to cancel.`;
+        
+        speak(confirmationPrompt, () => {
+          startVoiceRecognition();
+        });
+        
+        voiceFeedback.textContent = 'Listening for confirmation...';
+        
+      } catch (err) {
+        console.error('[OPERATION] Update name error:', err);
+        speak('Failed to process update name operation');
+      }
+    }
+
+    async function handleUpdateFaceOperation(targetName) {
+      try {
+        if (!targetName) {
+          speak('Update face operation requires a person name.');
+          return;
+        }
+        
+        operationState.type = 'update_face';
+        operationState.targetName = targetName;
+        operationState.confirmed = false;
+        
+        // Check if face is visible in current frame
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.8)
+        );
+        
+        const formData = new FormData();
+        formData.append("file", blob, "frame.jpg");
+        
+        // Send to face detection endpoint
+        const res = await fetch(`${backendURL}/api/face`, {
+          method: "POST",
+          body: formData
+        });
+        
+        const faceData = await res.json();
+        
+        if (!faceData.faces || faceData.faces.length === 0) {
+          speak('No face detected in the current frame. Please position the person in frame and try again.');
+          output.innerHTML = '<strong>Error:</strong> No face detected. Please show the person in camera.';
+          operationState.type = null;
+          return;
+        }
+        
+        operationState.faceDetected = true;
+        
+        const confirmationPrompt = `Do you want to update the face embedding for ${targetName}? Say yes to confirm or no to cancel.`;
+        
+        output.innerHTML = `<strong>Confirm Face Update</strong><br>
+          Person: ${targetName}<br>
+          Detected ${faceData.faces.length} face(s) in frame<br><br>
+          Say "yes" to confirm or "no" to cancel.`;
+        
+        speak(confirmationPrompt, () => {
+          startVoiceRecognition();
+        });
+        
+        voiceFeedback.textContent = 'Listening for confirmation...';
+        
+      } catch (err) {
+        console.error('[OPERATION] Update face error:', err);
+        speak('Failed to process update face operation');
+        operationState.type = null;
+      }
+    }
+
+    async function handleDeleteOperation(targetName) {
+      try {
+        if (!targetName) {
+          speak('Delete operation requires a person name.');
+          return;
+        }
+        
+        // Pause streaming
+        if (streaming) stopStreaming();
+        
+        operationState.type = 'delete';
+        operationState.targetName = targetName;
+        operationState.confirmed = false;
+        
+        const confirmationPrompt = `Warning: You are about to permanently delete ${targetName} from memory. Say yes to confirm deletion or no to cancel.`;
+        
+        output.innerHTML = `<strong>Confirm Deletion</strong><br>
+          <span style="color: #ff6b6b;">⚠️ This action cannot be undone</span><br>
+          Person to delete: ${targetName}<br><br>
+          Say "yes" to confirm deletion or "no" to cancel.`;
+        
+        speak(confirmationPrompt, () => {
+          startVoiceRecognition();
+        });
+        
+        voiceFeedback.textContent = 'Listening for confirmation...';
+        
+      } catch (err) {
+        console.error('[OPERATION] Delete error:', err);
+        speak('Failed to process delete operation');
+      }
+    }
+
+    // =============================================
+    // OPERATION EXECUTORS
+    // =============================================
+
+    async function executeOperation() {
+      try {
+        const opType = operationState.type;
+        
+        speak(`Processing ${opType} operation...`);
+        output.innerHTML = `<strong>Processing:</strong> ${opType}...`;
+        
+        if (opType === 'update_name') {
+          await executeUpdateName();
+        } else if (opType === 'update_face') {
+          await executeUpdateFace();
+        } else if (opType === 'delete') {
+          await executeDelete();
+        }
+        
+      } catch (err) {
+        console.error('[OPERATION] Execute error:', err);
+        speak('Operation failed. Please try again.');
+      }
+    }
+
+    async function executeUpdateName() {
+      try {
+        const response = await fetch(`${backendURL}/api/enroll/update-name`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            old_name: operationState.targetName,
+            new_name: operationState.newName
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          speak(`${operationState.targetName} has been renamed to ${operationState.newName}`);
+          output.innerHTML = `<strong>✓ Success:</strong> ${result.message}`;
+        } else {
+          speak(`Failed to update name: ${result.message}`);
+          output.innerHTML = `<strong>Error:</strong> ${result.message}`;
+        }
+      } catch (err) {
+        console.error('[UPDATE NAME] Error:', err);
+        speak('Network error during name update');
+      } finally {
+        operationState.type = null;
+        operationState.confirmed = false;
+      }
+    }
+
+    async function executeUpdateFace() {
+      try {
+        // Capture face from video
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        const blob = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.8)
+        );
+        
+        const formData = new FormData();
+        formData.append("file", blob, "frame.jpg");
+        
+        // Use the specialized capture endpoint to get the raw face encoding
+        const faceRes = await fetch(`${backendURL}/api/enroll/capture-face`, {
+          method: "POST",
+          body: formData
+        });
+        
+        const faceData = await faceRes.json();
+        
+        if (faceData.status !== 'captured' || !faceData.encoded_face) {
+          speak('No face detected. Please try again.');
+          return;
+        }
+        
+        const faceEncoding = faceData.encoded_face;
+        
+        // Send update request
+        const response = await fetch(`${backendURL}/api/enroll/update-face`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: operationState.targetName,
+            face_encoding: faceEncoding
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          speak(`Face embedding updated for ${operationState.targetName}`);
+          output.innerHTML = `<strong>✓ Success:</strong> ${result.message}`;
+        } else {
+          speak(`Failed to update face: ${result.message}`);
+          output.innerHTML = `<strong>Error:</strong> ${result.message}`;
+        }
+      } catch (err) {
+        console.error('[UPDATE FACE] Error:', err);
+        speak('Network error during face update');
+      } finally {
+        operationState.type = null;
+        operationState.confirmed = false;
+      }
+    }
+
+    async function executeDelete() {
+      try {
+        const response = await fetch(
+          `${backendURL}/api/enroll/${encodeURIComponent(operationState.targetName)}`,
+          { method: 'DELETE' }
+        );
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          speak(`${operationState.targetName} has been deleted from memory`);
+          output.innerHTML = `<strong>✓ Deleted:</strong> ${result.message}`;
+        } else {
+          speak(`Failed to delete: ${result.message}`);
+          output.innerHTML = `<strong>Error:</strong> ${result.message}`;
+        }
+      } catch (err) {
+        console.error('[DELETE] Error:', err);
+        speak('Network error during deletion');
+      } finally {
+        operationState.type = null;
+        operationState.confirmed = false;
+      }
+    }
+
     async function handleVoiceMode(modeData, originalCommand) {
       const { mode, prompt, endpoint } = modeData;
 
@@ -1600,8 +1905,31 @@
 
         case 'face':
           switchMode('face');
-          startStreaming();
-          speak('Face recognition mode activated');
+          
+          // Check for sub-operations from Groq
+          if (modeData.operation) {
+            console.log(`[VOICE] specialized face operation: ${modeData.operation}`);
+            const op = modeData.operation;
+            const target = modeData.target_name;
+            const newName = modeData.new_name;
+
+            if (op === 'update_name') {
+              handleUpdateNameOperation(target, newName);
+            } else if (op === 'update_face') {
+              handleUpdateFaceOperation(target);
+            } else if (op === 'delete') {
+              handleDeleteOperation(target);
+            } else if (op === 'create') {
+               // If Groq identifies 'create' but we didn't trigger via detection,
+               // we might need a manual "start enrollment" flow, but usually detection triggers it.
+               // For now, if user says "add person X", we can just speak instructions.
+               speak('To add a person, please ensure they are in front of the camera.');
+               startStreaming();
+            }
+          } else {
+            startStreaming();
+            speak('Face recognition mode activated');
+          }
           break;
 
         case 'vision':
