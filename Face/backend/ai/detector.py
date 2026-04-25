@@ -6,10 +6,11 @@ from ultralytics import YOLO
 import face_recognition
 import os
 
-CONF_THRESHOLD = 0.5
-# Resolve models path relative to this script so it works on any device
+CONF_THRESHOLD = 0.45
+# Using the official pre-trained YOLO11 model for maximum reliability
 current_dir = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "models", "bestLatest.pt"))
+# If yolo11n.pt doesn't exist in models/, Ultralytics will download it automatically
+MODEL_PATH = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "models", "yolo11n.pt"))
 # Global model instance (loaded once, reused)
 
 yolo_model = None

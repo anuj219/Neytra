@@ -303,7 +303,10 @@ Dependencies (requirements.txt):
 fastapi                  # Web frameworkuvicorn                  # ASGI serveropencv-python           # Image processingnumpy                    # Numerical computingpillow                   # Image loadingface_recognition        # Face encoding/detectionpyttsx3                 # Text-to-speechpython-multipart        # Form data handlingultralytics             # YOLO v8speechrecognition       # Microphone inputkeyboard                # Keyboard eventsgoogle-generativeai     # Gemini APIpython-dotenv           # .env loadinggroq                    # Groq API
 Models Directory:
 
-models/├─ bestLatest.pt    (Primary YOLO model)├─ bestv2.pt        (Backup model)└─ bestv3.pt        (Backup model)
+models/
+├─ yolo11n.pt       (Primary official YOLOv11 model)
+├─ bestLatest.pt    (Legacy custom model)
+└─ bestv2.pt        (Legacy backup)
 Resource Constraints:
 
 
